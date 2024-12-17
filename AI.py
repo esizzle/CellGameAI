@@ -70,7 +70,7 @@ class CellAI:
             move_y /= magnitude
 
         # scale speed
-        move_x *= cell.speed
-        move_y *= cell.speed
+        move_x *= cell.speed * 50
+        move_y *= cell.speed * 50
 
         return move_x, move_y

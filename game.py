@@ -1,4 +1,5 @@
 import pygame
+import pymunk
 import random
 from interactions import distance
 from cell import Cell
@@ -11,6 +12,7 @@ class Game:
         self.screen_height = height
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.surface = pygame.Surface((self.screen_width, self.screen_height))
+        self.space = pymunk.Space()
 
         self.clock = pygame.time.Clock()
         self.run = True
@@ -25,15 +27,24 @@ class Game:
                 self.grid[x // self.grid_size, y // self.grid_size] = []
 
         # Initialize player and game objects
-        self.player_speed = 3
+        # self.player_speed = 1
         self.player = Cell((self.screen_width / 2, self.screen_height / 2), is_player = True)
+        self.player.add_to_space(self.space)
+        self.player.set_collision_type(0)
         self.cells = [self.player]
         self.split_cells = [self.player]
-        self.particles = self.create_particles(100)
+        self.particles = self.create_particles(1000)
         self.consumed_particles = []
         self.update_grid()
 
         self.prev_time = pygame.time.get_ticks()
+
+        # handle collisions
+        self.handler = self.space.add_default_collision_handler()
+        self.handler.begin = self.begin_collision
+        self.handler.pre_solve = self.pre_collision
+        self.handler.post_solve = self.post_collision
+        self.handler.separate = self.separate_collision
 
     def create_particles(self, count):
         particles = []
@@ -51,6 +62,23 @@ class Game:
 
             particles.append(particle)
         return particles
+
+    # Create the collision handler (outside the game loop)
+    def begin_collision(self, arbiter, space, data):
+        # print("Collision occurred!")
+        return True  # Return False if you want to ignore the collision
+
+    def pre_collision(self, arbiter, space, data):
+        # print("Pre solve")
+        return True
+
+    def post_collision(self,arbiter, space, data):
+        # print("Post solve")
+        pass
+
+    def separate_collision(self, arbiter, space, data):
+        # print("Separate")
+        pass
 
     def update_grid(self):
         for key in self.grid:
@@ -89,18 +117,18 @@ class Game:
 
     def handle_input(self):
         keys = pygame.key.get_pressed()
-        player_x, player_y = self.player.position
+        player_x, player_y = self.player.body.velocity
 
         if keys[pygame.K_a]:
-            player_x -= self.player_speed
+            player_x = -self.player.speed * 50
         if keys[pygame.K_d]:
-            player_x += self.player_speed
+            player_x = self.player.speed * 50
         if keys[pygame.K_w]:
-            player_y -= self.player_speed
+            player_y = -self.player.speed * 50
         if keys[pygame.K_s]:
-            player_y += self.player_speed
+            player_y = self.player.speed * 50
 
-        self.player.position = (player_x, player_y)
+        self.player.body.velocity = (player_x, player_y)
 
     def update(self, delta_time):
         for cell in self.cells:
@@ -109,6 +137,7 @@ class Game:
             if cell.age >= cell.max_age:
                 cell.death(self.particles)
                 self.cells.remove(cell)
+                cell.remove_from_space(self.space)
                 self.update_grid()
 
                 if cell == self.player:
@@ -119,7 +148,7 @@ class Game:
                         self.run = False
 
         for cell in self.cells:
-            cell.split(self.cells)
+            cell.split(self.cells,self.space)
             if cell == self.player:
                 self.split_cells[0] = self.cells[-1]
 
@@ -133,13 +162,14 @@ class Game:
         self.particles = [p for p in self.particles if p not in self.consumed_particles]
 
         for cell in self.cells:
+            cell.update()
             if cell != self.player:
                 radius = 100 # temporary for testing
                 nearby_particles = self.find_particles_within_radius(cell, radius)
 
-                move_x, move_y = CellAI(cell.r, cell.g, cell.b).decide(cell,nearby_particles)
+                cell.body.velocity = CellAI(cell.r, cell.g, cell.b).decide(cell, nearby_particles)
 
-                cell.position = (cell.position[0]+ move_x, cell.position[1] + move_y)
+
 
     def render(self):
         self.screen.fill((0, 0, 0))
@@ -166,6 +196,7 @@ class Game:
             self.handle_input()
             self.update(delta_time)
             self.render()
+            self.space.step(delta_time)
 
         pygame.quit()
 
