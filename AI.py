@@ -58,9 +58,9 @@ class CellAI:
         if target_particle:
             move_x += target_particle.position[0] - cell.position[0]
             move_y += target_particle.position[1] - cell.position[1]
+
         else:
-            move_x += random.randint(0,10) - cell.position[0]
-            move_y += random.randint(0,10) - cell.position[1]
+            move_x, move_y = cell.body.velocity
 
 
         # Normalize movement
@@ -70,7 +70,7 @@ class CellAI:
             move_y /= magnitude
 
         # scale speed
-        move_x *= cell.speed * 50
-        move_y *= cell.speed * 50
+        move_x *= cell.genome.speed
+        move_y *= cell.genome.speed
 
         return move_x, move_y

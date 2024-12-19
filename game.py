@@ -2,7 +2,7 @@ import pygame
 import pymunk
 import random
 from interactions import distance
-from cell import Cell
+from cell import Cell, Genome
 from particle import Particle
 from AI import CellAI
 
@@ -28,7 +28,9 @@ class Game:
 
         # Initialize player and game objects
         # self.player_speed = 1
-        self.player = Cell((self.screen_width / 2, self.screen_height / 2), is_player = True)
+        default_genome = Genome()
+        init_chromosome = [default_genome]
+        self.player = Cell((self.screen_width / 2, self.screen_height / 2), init_chromosome,is_player = True)
         self.player.add_to_space(self.space)
         self.player.set_collision_type(0)
         self.cells = [self.player]
@@ -51,11 +53,11 @@ class Game:
         for _ in range(count):
             x = random.randint(0, self.screen_width)
             y = random.randint(0, self.screen_height)
-            color = random.randint(1, 3)
+            color = random.randint(1, 100)
 
-            if color == 1:
+            if color <= 33:
                 particle = Particle((x, y), 255, 0, 0)
-            elif color == 2:
+            elif 33 < color <= 67:
                 particle = Particle((x, y), 0, 255, 0)
             else:
                 particle = Particle((x, y), 0, 0, 255)
@@ -117,44 +119,38 @@ class Game:
 
     def handle_input(self):
         keys = pygame.key.get_pressed()
-        player_x, player_y = self.player.body.velocity
 
         if keys[pygame.K_a]:
-            player_x = -self.player.speed * 50
+            self.player.body.velocity = -self.player.genome.speed, self.player.body.velocity[1]
         if keys[pygame.K_d]:
-            player_x = self.player.speed * 50
+            self.player.body.velocity = self.player.genome.speed, self.player.body.velocity[1]
         if keys[pygame.K_w]:
-            player_y = -self.player.speed * 50
+            self.player.body.velocity = self.player.body.velocity[0], -self.player.genome.speed
         if keys[pygame.K_s]:
-            player_y = self.player.speed * 50
+            self.player.body.velocity = self.player.body.velocity[0], self.player.genome.speed
 
-        self.player.body.velocity = (player_x, player_y)
 
     def update(self, delta_time):
         for cell in self.cells:
             cell.age += delta_time
 
-            if cell.age >= cell.max_age:
+            if cell.age >= cell.genome.max_age:
                 cell.death(self.particles)
                 self.cells.remove(cell)
                 cell.remove_from_space(self.space)
                 self.update_grid()
 
                 if cell == self.player:
-                    if self.cells:
-                        self.player = self.split_cells[0]
-                        self.player.position = self.player.position
-                    else:
-                        self.run = False
+                    self.run = False
 
         for cell in self.cells:
             cell.split(self.cells,self.space)
             if cell == self.player:
-                self.split_cells[0] = self.cells[-1]
+                self.player = self.cells[-1]
 
         for particle in self.particles[:]:
             for cell in self.cells:
-                if distance(cell, particle) < cell.size:
+                if distance(cell, particle) < cell.genome.size:
                     cell.consume(particle.mass, particle.r, particle.g, particle.b)
                     self.consumed_particles.append(particle)
                     self.update_grid()
@@ -167,7 +163,7 @@ class Game:
                 radius = 100 # temporary for testing
                 nearby_particles = self.find_particles_within_radius(cell, radius)
 
-                cell.body.velocity = CellAI(cell.r, cell.g, cell.b).decide(cell, nearby_particles)
+                cell.body.velocity = CellAI(cell.genome.r, cell.genome.g, cell.genome.b).decide(cell, nearby_particles)
 
 
 
