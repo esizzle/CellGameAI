@@ -34,7 +34,6 @@ class Game:
         self.player.add_to_space(self.space)
         self.player.set_collision_type(0)
         self.cells = [self.player]
-        self.split_cells = [self.player]
         self.particles = self.create_particles(1000)
         self.consumed_particles = []
         self.update_grid()
@@ -96,7 +95,17 @@ class Game:
 
             self.grid[grid_x, grid_y].append(particle)
 
-    def find_particles_within_radius(self, cell: Cell, radius):
+        for cell in self.cells:
+            grid_x = int(cell.position[0] // self.grid_size)
+            grid_y = int(cell.position[1] // self.grid_size)
+
+            # Clamp grid_x and grid_y to stay within initialized bounds
+            grid_x = max(0, min(grid_x, self.screen_width // self.grid_size - 1))
+            grid_y = max(0, min(grid_y, self.screen_height // self.grid_size - 1))
+
+            self.grid[grid_x, grid_y].append(cell)
+
+    def find_objects_within_radius(self, cell: Cell, radius):
         grid_x = int(cell.position[0] // self.grid_size)
         grid_y = int(cell.position[1] // self.grid_size)
 
@@ -107,15 +116,15 @@ class Game:
             for dy in [-1, 0 ,1]
         ]
 
-        nearby_particles = []
+        nearby_objects = []
         for nx, ny in neighboring_cells:
             if (nx, ny) in self.grid:
-                for particle in self.grid[(nx, ny)]:
-                    if distance(cell, particle)<= radius:
-                        nearby_particles.append(particle)
+                for objects in self.grid[(nx, ny)]:
+                    if distance(cell, objects)<= radius:
+                        nearby_objects.append(objects)
 
 
-        return nearby_particles
+        return nearby_objects
 
     def handle_input(self):
         keys = pygame.key.get_pressed()
@@ -138,22 +147,21 @@ class Game:
                 cell.death(self.particles)
                 self.cells.remove(cell)
                 cell.remove_from_space(self.space)
-                self.update_grid()
 
                 if cell == self.player:
-                    self.run = False
-
+                    #  self.run = False
+                    pass
         for cell in self.cells:
             cell.split(self.cells,self.space)
-            if cell == self.player:
-                self.player = self.cells[-1]
+            if cell.is_player:
+                self.player = cell
+
 
         for particle in self.particles[:]:
             for cell in self.cells:
                 if distance(cell, particle) < cell.genome.size:
                     cell.consume(particle.mass, particle.r, particle.g, particle.b)
                     self.consumed_particles.append(particle)
-                    self.update_grid()
 
         self.particles = [p for p in self.particles if p not in self.consumed_particles]
 
@@ -161,11 +169,11 @@ class Game:
             cell.update()
             if cell != self.player:
                 radius = 100 # temporary for testing
-                nearby_particles = self.find_particles_within_radius(cell, radius)
+                nearby_objects = self.find_objects_within_radius(cell, cell.genome.detection_radius)
 
-                cell.body.velocity = CellAI(cell.genome.r, cell.genome.g, cell.genome.b).decide(cell, nearby_particles)
+                cell.body.velocity = CellAI(cell.genome.r, cell.genome.g, cell.genome.b).decide(cell, nearby_objects)
 
-
+        self.update_grid()
 
     def render(self):
         self.screen.fill((0, 0, 0))

@@ -3,6 +3,7 @@ import pymunk
 import math
 from particle import Particle
 import random
+import copy
 
 from physics_particle import PhysicsParticle
 
@@ -27,13 +28,13 @@ class Cell(PhysicsParticle):
 
     # draw cell onto screen
     def draw_cell(self,screen):
-        pygame.draw.circle(screen, (self.genome.r, self.genome.g, self.genome.b), (self.body.position[0], self.body.position[1]), self.genome.size,1)
+        pygame.draw.circle(screen, (self.genome.r, self.genome.g, self.genome.b), (self.body.position[0], self.body.position[1]), self.genome.size,self.genome.thickness)
 
     def draw_split_cell(self, screen):
         animate_split = 0
         for i in range(self.genome.size+1):
-            pygame.draw.circle(screen, (self.genome.r, self.genome.g, self.genome.b), (self.body.position[0]-animate_split+10, self.body.position[1]), self.genome.size, 1)
-            pygame.draw.circle(screen, (self.genome.r, self.genome.g, self.genome.b), (self.body.position[0]+animate_split-10, self.body.position[1]), self.genome.size, 1)
+            pygame.draw.circle(screen, (self.genome.r, self.genome.g, self.genome.b), (self.body.position[0]-animate_split+10, self.body.position[1]), self.genome.size, self.genome.thickness)
+            pygame.draw.circle(screen, (self.genome.r, self.genome.g, self.genome.b), (self.body.position[0]+animate_split-10, self.body.position[1]), self.genome.size, self.genome.thickness)
             animate_split += 1
 
     # change cell mass
@@ -75,20 +76,17 @@ class Cell(PhysicsParticle):
             new_chrome1 = []
             new_chrome2 = []
             for genome in self.chromosome:
-                new_genome1 = genome
+                new_genome1 = copy.deepcopy(genome)
+                new_genome2 = copy.deepcopy(genome)
+
                 new_genome1.mutate_gene()
-                new_chrome1.append(new_genome1)
-                new_genome2 = genome
                 new_genome2.mutate_gene()
+
+                new_chrome1.append(new_genome1)
                 new_chrome2.append(new_genome2)
 
             active_gene1 = random.randint(0, len(new_chrome1)-1)
             active_gene2 = random.randint(0, len(new_chrome2)-1)
-            print(self.chromosome)
-            print(new_chrome1)
-            print(new_genome1)
-            print(active_gene1)
-            print(new_chrome1[active_gene1])
             pos1 = self.body.position[0] - new_chrome1[active_gene1].size, self.body.position[1]
             pos2 = self.body.position[0] + new_chrome2[active_gene2].size, self.body.position[1]
 
@@ -105,21 +103,6 @@ class Cell(PhysicsParticle):
             new_cell2.add_to_space(space)
             new_cell1.set_collision_type(len(cells)-1)
             new_cell2.set_collision_type(len(cells))
-
-
-
-            '''
-            self.mass = self.genome.start_mass
-            self.genome.size = 10
-            theta = random.randint(0,self.mass) * 2 * math.pi / self.mass
-            cell_x = self.body.position[0] + self.size+10
-            cell_y = self.body.position[1]
-            new_cell = Cell((cell_x,cell_y),self.r,self.g,self.b,self.mass,self.size)
-            new_cell.mutate_cell()
-            self.has_split = True
-            cells.append(new_cell)
-            new_cell.add_to_space(space)
-            new_cell.set_collision_type(len(cells))'''
 
     def death(self,particles):
         if self.age >= self.genome.max_age:
@@ -144,7 +127,7 @@ class Cell(PhysicsParticle):
 
 class Genome:
     def __init__(self, r: int = 255, g: int = 255, b: int = 255, size: int = 10, start_mass: int = 20, max_mass: int = 40,
-                 thickness: float = 0.1, speed: int = 50, detection_radius: int = 50, max_age: int = 5, charge: int = 0,
+                 thickness: float = 1, speed: int = 50, detection_radius: int = 50, max_age: int = 5, charge: int = 0,
                  mutation_rate: float = 0.1, multi_cell: bool = False, aggression: float = 1, caution: float = 1
                 ):
 
@@ -178,16 +161,19 @@ class Genome:
             if random.random() < self.mutation_rate:
                 self.size += random.randint(1,5)
                 self.max_mass += random.randint(1,5)
-                self.speed -= random.randint(0,15)
+                self.speed -= random.randint(0,10)
 
                 # clamp speed
-                if self.speed < 0:
-                    self.speed = 0
+                if self.speed < 1:
+                    self.speed = 1
             if random.random() < self.mutation_rate:
                 self.start_mass += random.randint(1,5)
             if random.random() < self.mutation_rate:
-                self.thickness += 1
+                self.thickness = 2
                 self.speed -= random.randint(1,5)
+                if self.speed < 1:
+                    self.speed = 1
+
             if random.random() < self.mutation_rate:
                 self.max_age += random.randint(1,5)
 
@@ -198,10 +184,16 @@ class Genome:
             if random.random() < self.mutation_rate:
                 self.caution -= random.uniform(1.0,5.0)
             if random.random() < self.mutation_rate:
-                self.speed += random.randint(0,15)
+                self.speed += random.randint(10,25)
                 self.size -= random.randint(1,5)
+                if self.size < 1:
+                    self.size = 1
             if random.random() < self.mutation_rate:
                 self.max_mass -= random.randint(1,5)
+                if self.max_mass < (self.start_mass + 5):
+                    self.max_mass = self.start_mass + 5
+                if self.max_mass < (self.size + 5):
+                    self.max_mass = self.size+5
             if random.random() < self.mutation_rate:
                 self.detection_radius += random.randint(1, 10)
             if random.random() < self.mutation_rate:
@@ -210,7 +202,7 @@ class Genome:
         # special: charge = +/- 1, mutation_rate = rand(0.1,0.9), multi_cell = true
         else:
             if random.random() < self.mutation_rate:
-                self.thickness += random.randint(-1,1)
+                self.thickness = random.choice([1,2])
             if random.random() < self.mutation_rate:
                 self.charge = random.choice([-1,0,1])
             if random.random() < self.mutation_rate:
