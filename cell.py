@@ -19,6 +19,8 @@ class Cell(PhysicsParticle):
         self.has_split = has_split
 
         if self.is_player:
+            self.max_age = 100000
+            self.speed = 300
             pass
 
         # pymunk
@@ -27,8 +29,9 @@ class Cell(PhysicsParticle):
         self.create_circle(self.genome.size)
 
     # draw cell onto screen
-    def draw_cell(self,screen):
-        pygame.draw.circle(screen, (self.genome.r, self.genome.g, self.genome.b), (self.body.position[0], self.body.position[1]), self.genome.size,self.genome.thickness)
+    def draw_cell(self, surface, offset=(0, 0)):
+        x, y = self.body.position[0] + offset[0], self.body.position[1] + offset[1]
+        pygame.draw.circle(surface, (self.genome.r, self.genome.g, self.genome.b), (int(x), int(y)), self.genome.size, self.genome.thickness)
 
     def draw_split_cell(self, screen):
         animate_split = 0
@@ -67,9 +70,16 @@ class Cell(PhysicsParticle):
         if self.genome.b < 0:
             self.genome.b = 0
 
-    def consume(self, mass, r,g,b):
+    def consume_particle(self, mass, r,g,b):
         self.calculate_mass(mass)
         self.calculate_colour(mass, r,g,b)
+
+    def consume_cell(self, other, cells, particles, space):
+        if (self.genome.strength > other.genome.thickness) and (self.genome.size > other.genome.size):
+            other.death(particles)
+            cells.remove(other)
+            other.remove_from_space(space)
+            self.chromosome.append(other.genome)
 
     def split(self,cells,space):
         if self.mass >= self.genome.max_mass:
@@ -105,7 +115,6 @@ class Cell(PhysicsParticle):
             new_cell2.set_collision_type(len(cells))
 
     def death(self,particles):
-        if self.age >= self.genome.max_age:
             for i in range(self.mass):
                 # create a new cell
                 theta = i*2*math.pi/self.mass
@@ -127,7 +136,7 @@ class Cell(PhysicsParticle):
 
 class Genome:
     def __init__(self, r: int = 255, g: int = 255, b: int = 255, size: int = 10, start_mass: int = 20, max_mass: int = 40,
-                 thickness: float = 1, speed: int = 50, detection_radius: int = 50, max_age: int = 5, charge: int = 0,
+                 thickness: int = 1, strength: int = 1, speed: int = 50, detection_radius: int = 50, max_age: int = 5, charge: int = 0,
                  mutation_rate: float = 0.1, multi_cell: bool = False, aggression: float = 1, caution: float = 1
                 ):
 
@@ -139,6 +148,7 @@ class Genome:
         self.start_mass = start_mass
         self.max_mass = max_mass
         self.thickness = thickness
+        self.strength = strength
         self.speed = speed
         self.detection_radius = detection_radius
         self.max_age = max_age
@@ -158,6 +168,8 @@ class Genome:
                 self.caution += random.uniform(1.0,5.0)
             if random.random() < self.mutation_rate:
                 self.aggression -= random.uniform(1.0,5.0)
+                if self.aggression < 0.1:
+                    self.aggression = 0.1
             if random.random() < self.mutation_rate:
                 self.size += random.randint(1,5)
                 self.max_mass += random.randint(1,5)
@@ -167,7 +179,8 @@ class Genome:
                 if self.speed < 1:
                     self.speed = 1
             if random.random() < self.mutation_rate:
-                self.start_mass += random.randint(1,5)
+                self.start_mass += random.randint(5,10)
+                self.max_mass = 2*self.start_mass
             if random.random() < self.mutation_rate:
                 self.thickness = 2
                 self.speed -= random.randint(1,5)
@@ -184,16 +197,21 @@ class Genome:
             if random.random() < self.mutation_rate:
                 self.caution -= random.uniform(1.0,5.0)
             if random.random() < self.mutation_rate:
+                self.strength = random.randint(1,2)
+            if random.random() < self.mutation_rate:
                 self.speed += random.randint(10,25)
                 self.size -= random.randint(1,5)
                 if self.size < 1:
                     self.size = 1
             if random.random() < self.mutation_rate:
-                self.max_mass -= random.randint(1,5)
-                if self.max_mass < (self.start_mass + 5):
-                    self.max_mass = self.start_mass + 5
-                if self.max_mass < (self.size + 5):
-                    self.max_mass = self.size+5
+                self.start_mass -= random.randint(1,5)
+                self.max_mass = 2 * self.start_mass
+                if self.start_mass < 5:
+                    self.max_mass = 10
+                    self.start_mass = 5
+                if self.start_mass < self.size:
+                    self.start_mass = self.size
+                    self.max_mass = 2 * self.start_mass
             if random.random() < self.mutation_rate:
                 self.detection_radius += random.randint(1, 10)
             if random.random() < self.mutation_rate:
@@ -201,6 +219,8 @@ class Genome:
 
         # special: charge = +/- 1, mutation_rate = rand(0.1,0.9), multi_cell = true
         else:
+            if random.random() < self.mutation_rate:
+                self.detection_radius -= random.randint(1, 5)
             if random.random() < self.mutation_rate:
                 self.thickness = random.choice([1,2])
             if random.random() < self.mutation_rate:
@@ -211,3 +231,11 @@ class Genome:
                 self.b = 255
             if random.random() < self.mutation_rate:
                 self.multi_cell = True
+
+    def __str__(self):
+        return '''PHYSICAL: color: {self.r}, {self.g}, {self.b}, size: {self.size}, start_mass: {self.start_mass}, max_mass: {self.max_mass}, 
+                thickness: {self.thickness}, strength: {self.strength}, speed: {self.speed}, detection_radius: {self.detection_radius}, 
+                max_age: {self.max_age}, charge: {self.charge}, mutation_rate: {self.mutation_rate}, multi_cell: {self.multi_cell}
+                
+                BEHAVIOURAL: aggression: {self.aggression}, caution: {self.caution}'''.format(self=self)
+

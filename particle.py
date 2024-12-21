@@ -10,7 +10,8 @@ class Particle:
         self.mass = mass
         self.size = size
 
-    def draw_particle(self, screen):
-        pygame.draw.circle(screen, (self.r, self.g, self.b), self.position, self.size)
+    def draw_particle(self, surface, offset=(0, 0)):
+        x, y = self.position[0] + offset[0], self.position[1] + offset[1]
+        pygame.draw.circle(surface, (self.r, self.g, self.b), (int(x), int(y)), self.size)
 
 

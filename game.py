@@ -33,6 +33,8 @@ class Game:
         self.player = Cell((self.screen_width / 2, self.screen_height / 2), init_chromosome,is_player = True)
         self.player.add_to_space(self.space)
         self.player.set_collision_type(0)
+        self.camera_x = self.player.position[0]
+        self.camera_y = self.player.position[1]
         self.cells = [self.player]
         self.particles = self.create_particles(1000)
         self.consumed_particles = []
@@ -105,6 +107,10 @@ class Game:
 
             self.grid[grid_x, grid_y].append(cell)
 
+    def update_camera(self):
+        self.camera_x = self.player.position[0] - self.screen_width / 2
+        self.camera_y = self.player.position[1] - self.screen_height / 2
+
     def find_objects_within_radius(self, cell: Cell, radius):
         grid_x = int(cell.position[0] // self.grid_size)
         grid_y = int(cell.position[1] // self.grid_size)
@@ -138,6 +144,7 @@ class Game:
         if keys[pygame.K_s]:
             self.player.body.velocity = self.player.body.velocity[0], self.player.genome.speed
 
+        self.update_camera()
 
     def update(self, delta_time):
         for cell in self.cells:
@@ -160,10 +167,18 @@ class Game:
         for particle in self.particles[:]:
             for cell in self.cells:
                 if distance(cell, particle) < cell.genome.size:
-                    cell.consume(particle.mass, particle.r, particle.g, particle.b)
+                    cell.consume_particle(particle.mass, particle.r, particle.g, particle.b)
                     self.consumed_particles.append(particle)
 
         self.particles = [p for p in self.particles if p not in self.consumed_particles]
+
+        for cell in self.cells:
+            for other_cell in self.cells:
+                if other_cell != cell:
+                    if distance(cell, other_cell) < cell.genome.size+other_cell.genome.size:
+                        cell.consume_cell(other_cell,self.cells,self.particles,self.space)
+
+
 
         for cell in self.cells:
             cell.update()
@@ -177,12 +192,17 @@ class Game:
 
     def render(self):
         self.screen.fill((0, 0, 0))
-        self.surface.fill((0, 0, 0))
 
+        # Calculate the camera offset
+        camera_offset = (-self.camera_x, -self.camera_y)
+
+        # Draw cells with camera offset
         for cell in self.cells:
-            cell.draw_cell(self.screen)
+            cell.draw_cell(self.screen, offset=camera_offset)
+
+        # Draw particles with camera offset
         for particle in self.particles:
-            particle.draw_particle(self.screen)
+            particle.draw_particle(self.screen, offset=camera_offset)
 
         pygame.display.flip()
 
