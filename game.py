@@ -8,9 +8,13 @@ from AI import CellAI
 
 class Game:
     def __init__(self, width=800, height=400):
+        self.font = pygame.font.SysFont("Arcade_Classic", 18)
+
         self.screen_width = width
         self.screen_height = height
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        self.fullscreen = False
+
         self.surface = pygame.Surface((self.screen_width, self.screen_height))
         self.space = pymunk.Space()
 
@@ -20,6 +24,8 @@ class Game:
         # Initialize grid
         self.grid_size = 100
         self.grid = {}
+
+        self.create_walls()
 
         # create cells (lists) to store information inside grid
         for x in range(0, self.screen_width, self.grid_size):
@@ -33,8 +39,10 @@ class Game:
         self.player = Cell((self.screen_width / 2, self.screen_height / 2), init_chromosome,is_player = True)
         self.player.add_to_space(self.space)
         self.player.set_collision_type(0)
+
         self.camera_x = self.player.position[0]
         self.camera_y = self.player.position[1]
+        self.camera_speed = 2
         self.cells = [self.player]
         self.particles = self.create_particles(1000)
         self.consumed_particles = []
@@ -65,6 +73,36 @@ class Game:
 
             particles.append(particle)
         return particles
+
+    def create_walls(self):
+        thickness = 10  # Thickness of the wall segments
+
+        # Create 4 segments around the edges of the world
+        walls = [
+            pymunk.Segment(self.space.static_body, (0, 0), (self.screen_width, 0), thickness),  # Top
+            pymunk.Segment(self.space.static_body, (0, self.screen_height), (self.screen_width, self.screen_height),
+                           thickness),  # Bottom
+            pymunk.Segment(self.space.static_body, (0, 0), (0, self.screen_height), thickness),  # Left
+            pymunk.Segment(self.space.static_body, (self.screen_width, 0), (self.screen_width, self.screen_height),
+                           thickness),  # Right
+        ]
+
+        # Optional: set properties of the walls
+        for wall in walls:
+            wall.elasticity = 1.0  # Bounciness
+            wall.friction = 0.5
+            wall.collision_type = 100  # Arbitrary number for walls if needed
+
+        self.space.add(*walls)
+
+    def draw_walls(self):
+        wall_color = (255, 255, 255)
+        pygame.draw.line(self.screen, wall_color, (0, 0), (self.screen_width, 0), 2)  # Top
+        pygame.draw.line(self.screen, wall_color, (0, self.screen_height), (self.screen_width, self.screen_height),
+                         2)  # Bottom
+        pygame.draw.line(self.screen, wall_color, (0, 0), (0, self.screen_height), 2)  # Left
+        pygame.draw.line(self.screen, wall_color, (self.screen_width, 0), (self.screen_width, self.screen_height),
+                         2)  # Right
 
     # Create the collision handler (outside the game loop)
     def begin_collision(self, arbiter, space, data):
@@ -133,18 +171,45 @@ class Game:
         return nearby_objects
 
     def handle_input(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.run = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_f:
+                    self.fullscreen = not self.fullscreen
+                    if self.fullscreen:
+                        self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                    else:
+                        self.screen = pygame.display.set_mode((800, 400))
+
         keys = pygame.key.get_pressed()
+        speed = self.camera_speed * (2 if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1)
 
         if keys[pygame.K_a]:
-            self.player.body.velocity = -self.player.genome.speed, self.player.body.velocity[1]
+            if self.player.age >= self.player.genome.max_age:
+                self.camera_x -= speed
+            else:
+                self.player.body.velocity = -self.player.genome.speed, self.player.body.velocity[1]
         if keys[pygame.K_d]:
-            self.player.body.velocity = self.player.genome.speed, self.player.body.velocity[1]
-        if keys[pygame.K_w]:
-            self.player.body.velocity = self.player.body.velocity[0], -self.player.genome.speed
-        if keys[pygame.K_s]:
-            self.player.body.velocity = self.player.body.velocity[0], self.player.genome.speed
+            if self.player.age >= self.player.genome.max_age:
+                self.camera_x += speed
+            else:
+                self.player.body.velocity = self.player.genome.speed, self.player.body.velocity[1]
 
-        self.update_camera()
+        if keys[pygame.K_w]:
+            if self.player.age >= self.player.genome.max_age:
+                self.camera_y -= speed
+            else:
+                self.player.body.velocity = self.player.body.velocity[0], -self.player.genome.speed
+
+        if keys[pygame.K_s]:
+            if self.player.age >= self.player.genome.max_age:
+                self.camera_y += speed
+            else:
+                self.player.body.velocity = self.player.body.velocity[0], self.player.genome.speed
+
+        if self.player.age < self.player.genome.max_age:
+            self.update_camera()
 
     def update(self, delta_time):
         for cell in self.cells:
@@ -204,6 +269,10 @@ class Game:
         for particle in self.particles:
             particle.draw_particle(self.screen, offset=camera_offset)
 
+        fps = self.clock.get_fps()
+        fps_text = self.font.render(f"FPS: {fps:.2f}", True, pygame.Color("white"))
+        self.screen.blit(fps_text, (10, 10))
+
         pygame.display.flip()
 
     def run_game_loop(self):
@@ -212,10 +281,6 @@ class Game:
             current_time = pygame.time.get_ticks()
             delta_time = (current_time - self.prev_time) / 1000.0
             self.prev_time = current_time
-
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.run = False
 
             self.handle_input()
             self.update(delta_time)
