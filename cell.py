@@ -74,12 +74,12 @@ class Cell(PhysicsParticle):
         self.calculate_mass(mass)
         self.calculate_colour(mass, r,g,b)
 
-    def consume_cell(self, other, cells, particles, space):
+    def consume_cell(self, other, cells, particles, space, to_remove_cells):
         if (self.genome.strength > other.genome.thickness) and (self.genome.size > other.genome.size):
             other.death(particles)
-            cells.remove(other)
             other.remove_from_space(space)
             self.chromosome.append(other.genome)
+            to_remove_cells.add(other)
 
     def split(self,cells,space):
         if self.mass >= self.genome.max_mass:
@@ -136,7 +136,7 @@ class Cell(PhysicsParticle):
 
 class Genome:
     def __init__(self, r: int = 255, g: int = 255, b: int = 255, size: int = 10, start_mass: int = 20, max_mass: int = 40,
-                 thickness: int = 1, strength: int = 1, speed: int = 50, detection_radius: int = 50, max_age: int = 5, charge: int = 0,
+                 thickness: int = 1, strength: int = 1, speed: int = 50, detection_radius: int = 1, max_age: int = 5, charge: int = 0,
                  mutation_rate: float = 0.1, multi_cell: bool = False, aggression: float = 1, caution: float = 1
                 ):
 
@@ -213,7 +213,7 @@ class Genome:
                     self.start_mass = self.size
                     self.max_mass = 2 * self.start_mass
             if random.random() < self.mutation_rate:
-                self.detection_radius += random.randint(1, 10)
+                self.detection_radius = random.randint(1, 3)
             if random.random() < self.mutation_rate:
                 self.mutation_rate += random.uniform(0.01, 0.05)
 

@@ -1,19 +1,26 @@
 import pygame
 import pymunk
 import random
+
+from pygame import VIDEORESIZE
+
 from interactions import distance
 from cell import Cell, Genome
 from particle import Particle
 from AI import CellAI
 
 class Game:
-    def __init__(self, width=800, height=400):
+    def __init__(self, width=1920, height=1080):
         self.font = pygame.font.SysFont("Arcade_Classic", 18)
 
-        self.screen_width = width
-        self.screen_height = height
-        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        # Fixed resolution for rendering
+        self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
+        self.screen_width, self.screen_height = self.screen.get_size()
+        print("Screen size:", self.screen_width, self.screen_height)
+
         self.fullscreen = False
+        self.width = width
+        self.height = height
 
         self.surface = pygame.Surface((self.screen_width, self.screen_height))
         self.space = pymunk.Space()
@@ -40,11 +47,11 @@ class Game:
         self.player.add_to_space(self.space)
         self.player.set_collision_type(0)
 
-        self.camera_x = self.player.position[0]
-        self.camera_y = self.player.position[1]
+        self.camera_x = self.player.position[0] - self.screen_width // 2
+        self.camera_y = self.player.position[1] - self.screen_height // 2
         self.camera_speed = 2
         self.cells = [self.player]
-        self.particles = self.create_particles(1000)
+        self.particles = self.create_particles(5000)
         self.consumed_particles = []
         self.update_grid()
 
@@ -95,13 +102,13 @@ class Game:
 
         self.space.add(*walls)
 
-    def draw_walls(self):
+    def draw_walls(self, surface):
         wall_color = (255, 255, 255)
-        pygame.draw.line(self.screen, wall_color, (0, 0), (self.screen_width, 0), 2)  # Top
-        pygame.draw.line(self.screen, wall_color, (0, self.screen_height), (self.screen_width, self.screen_height),
+        pygame.draw.line(surface, wall_color, (0, 0), (self.screen_width, 0), 2)  # Top
+        pygame.draw.line(surface, wall_color, (0, self.screen_height), (self.screen_width, self.screen_height),
                          2)  # Bottom
-        pygame.draw.line(self.screen, wall_color, (0, 0), (0, self.screen_height), 2)  # Left
-        pygame.draw.line(self.screen, wall_color, (self.screen_width, 0), (self.screen_width, self.screen_height),
+        pygame.draw.line(surface, wall_color, (0, 0), (0, self.screen_height), 2)  # Left
+        pygame.draw.line(surface, wall_color, (self.screen_width, 0), (self.screen_width, self.screen_height),
                          2)  # Right
 
     # Create the collision handler (outside the game loop)
@@ -149,24 +156,25 @@ class Game:
         self.camera_x = self.player.position[0] - self.screen_width / 2
         self.camera_y = self.player.position[1] - self.screen_height / 2
 
-    def find_objects_within_radius(self, cell: Cell, radius):
+
+    # grid_radius = 1 -> 3x3 grid
+    # grid_radius = 2 -> 5x5 grid
+    # grid_radius = 3 -> 7x7 grid
+    def find_objects_within_radius(self, cell: Cell, grid_radius: int):
         grid_x = int(cell.position[0] // self.grid_size)
         grid_y = int(cell.position[1] // self.grid_size)
 
-        # Determine which grid cells to check
+        # Determine which grid cells to check based on `grid_radius`
         neighboring_cells = [
             (grid_x + dx, grid_y + dy)
-            for dx in [-1, 0 ,1]
-            for dy in [-1, 0 ,1]
+            for dx in range(-grid_radius, grid_radius + 1)
+            for dy in range(-grid_radius, grid_radius + 1)
         ]
 
         nearby_objects = []
         for nx, ny in neighboring_cells:
             if (nx, ny) in self.grid:
-                for objects in self.grid[(nx, ny)]:
-                    if distance(cell, objects)<= radius:
-                        nearby_objects.append(objects)
-
+                nearby_objects.extend(self.grid[(nx, ny)])
 
         return nearby_objects
 
@@ -174,13 +182,17 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.run = False
+
+            if event.type == VIDEORESIZE:
+                if not self.fullscreen:
+                    self.fullscreen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_f:
                     self.fullscreen = not self.fullscreen
                     if self.fullscreen:
-                        self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                        self.screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
                     else:
-                        self.screen = pygame.display.set_mode((800, 400))
+                        self.screen = pygame.display.set_mode((self.width, self.height))
 
         keys = pygame.key.get_pressed()
         speed = self.camera_speed * (2 if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1)
@@ -229,21 +241,30 @@ class Game:
                 self.player = cell
 
 
-        for particle in self.particles[:]:
-            for cell in self.cells:
-                if distance(cell, particle) < cell.genome.size:
-                    cell.consume_particle(particle.mass, particle.r, particle.g, particle.b)
-                    self.consumed_particles.append(particle)
+        # only using nearby particles, check if cell is eating a particle
+        for cell in self.cells:
+            nearby_objects = self.find_objects_within_radius(cell, cell.genome.detection_radius)
 
-        self.particles = [p for p in self.particles if p not in self.consumed_particles]
+            for obj in nearby_objects:
+                if isinstance(obj, Particle) and distance(cell, obj) < cell.genome.size:
+                    cell.consume_particle(obj.mass, obj.r, obj.g, obj.b)
+                    self.consumed_particles.append(obj)
+
+        to_remove = set(self.consumed_particles)
+        self.particles = [p for p in self.particles if p not in to_remove]
+
+        to_remove_cells = set()
 
         for cell in self.cells:
             for other_cell in self.cells:
-                if other_cell != cell:
-                    if distance(cell, other_cell) < cell.genome.size+other_cell.genome.size:
-                        cell.consume_cell(other_cell,self.cells,self.particles,self.space)
+                if other_cell != cell and other_cell not in to_remove_cells:
+                    if distance(cell, other_cell) < cell.genome.size + other_cell.genome.size:
+                        cell.consume_cell(other_cell, self.cells, self.particles, self.space, to_remove_cells)
 
-
+        # After looping, remove all marked cells
+        for dead in to_remove_cells:
+            if dead in self.cells:
+                self.cells.remove(dead)
 
         for cell in self.cells:
             cell.update()
@@ -269,6 +290,8 @@ class Game:
         for particle in self.particles:
             particle.draw_particle(self.screen, offset=camera_offset)
 
+        #self.draw_walls(self.game_surface)
+
         fps = self.clock.get_fps()
         fps_text = self.font.render(f"FPS: {fps:.2f}", True, pygame.Color("white"))
         self.screen.blit(fps_text, (10, 10))
@@ -276,6 +299,7 @@ class Game:
         pygame.display.flip()
 
     def run_game_loop(self):
+        prev_cell_len = 0
         while self.run:
             delta_time = self.clock.tick(60) / 1000.0
             current_time = pygame.time.get_ticks()
@@ -286,6 +310,12 @@ class Game:
             self.update(delta_time)
             self.render()
             self.space.step(delta_time)
+
+
+            if prev_cell_len != len(self.cells):
+                print("Amount of cells: ", len(self.cells))
+                prev_cell_len = len(self.cells)
+
 
         pygame.quit()
 
