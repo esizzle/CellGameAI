@@ -21,6 +21,8 @@ class Game:
         self.fullscreen = False
         self.width = width
         self.height = height
+        self.world_width = width
+        self.world_height = height
 
         self.surface = pygame.Surface((self.screen_width, self.screen_height))
         self.space = pymunk.Space()
@@ -32,7 +34,7 @@ class Game:
         self.grid_size = 100
         self.grid = {}
 
-        self.create_walls()
+        # self.create_walls()
 
         # create cells (lists) to store information inside grid
         for x in range(0, self.screen_width, self.grid_size):
@@ -50,9 +52,12 @@ class Game:
         self.camera_x = self.player.position[0] - self.screen_width // 2
         self.camera_y = self.player.position[1] - self.screen_height // 2
         self.camera_speed = 2
+
         self.cells = [self.player]
         self.particles = self.create_particles(5000)
         self.consumed_particles = []
+        self.to_remove_cells = set()
+
         self.update_grid()
 
         self.prev_time = pygame.time.get_ticks()
@@ -82,7 +87,7 @@ class Game:
         return particles
 
     def create_walls(self):
-        thickness = 10  # Thickness of the wall segments
+        thickness = 1  # Thickness of the wall segments
 
         # Create 4 segments around the edges of the world
         walls = [
@@ -98,18 +103,33 @@ class Game:
         for wall in walls:
             wall.elasticity = 1.0  # Bounciness
             wall.friction = 0.5
-            wall.collision_type = 100  # Arbitrary number for walls if needed
+            wall.collision_type = 1000  # Arbitrary number for walls if needed
 
         self.space.add(*walls)
 
-    def draw_walls(self, surface):
+    def handle_wrap_around(self, obj):
+        x, y = obj.body.position
+        w, h = self.world_width, self.world_height  # Define your world size
+
+        if x - obj.size < 0:
+            obj.body.position = (w -obj.size, y)
+        elif x + obj.size > w:
+            obj.body.position = (0 + obj.size, y)
+
+        if y - obj.size < 0:
+            obj.body.position = (x, h - obj.size)
+        elif y + obj.size > h:
+            obj.body.position = (x, 0 + obj.size)
+
+
+    def draw_walls(self, surface,  offset=(0, 0)):
         wall_color = (255, 255, 255)
-        pygame.draw.line(surface, wall_color, (0, 0), (self.screen_width, 0), 2)  # Top
-        pygame.draw.line(surface, wall_color, (0, self.screen_height), (self.screen_width, self.screen_height),
-                         2)  # Bottom
-        pygame.draw.line(surface, wall_color, (0, 0), (0, self.screen_height), 2)  # Left
-        pygame.draw.line(surface, wall_color, (self.screen_width, 0), (self.screen_width, self.screen_height),
-                         2)  # Right
+        pygame.draw.line(surface, wall_color, (0 + offset[0], 0 + offset[1]), (self.screen_width + offset[0], 0 + offset[1]), 2)  # Top
+        pygame.draw.line(surface, wall_color, (0 + offset[0], self.screen_height + offset[1]), (self.screen_width + offset[0], self.screen_height + offset[1]),
+                         1)  # Bottom
+        pygame.draw.line(surface, wall_color, (0 + offset[0], 0 + offset[1]), (0 + offset[0], self.screen_height + offset[1]), 2)  # Left
+        pygame.draw.line(surface, wall_color, (self.screen_width + offset [0], 0 + offset[1]), (self.screen_width + offset[0], self.screen_height + offset[1]),
+                         1)  # Right
 
     # Create the collision handler (outside the game loop)
     def begin_collision(self, arbiter, space, data):
@@ -178,6 +198,19 @@ class Game:
 
         return nearby_objects
 
+    def trigger_explosion(self, cell):
+        # can be changed for greater explosion radii
+        explosion_radius = 1
+        nearby_objects = self.find_objects_within_radius(cell, explosion_radius)
+
+        for obj in nearby_objects:
+            if isinstance(obj, Cell) and (obj != cell) and (obj not in self.to_remove_cells):
+                obj.death(self.particles)
+                obj.age = obj.genome.max_age
+                obj.remove_from_space(self.space)
+                self.cells.remove(obj)
+
+
     def handle_input(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -228,6 +261,8 @@ class Game:
             cell.age += delta_time
 
             if cell.age >= cell.genome.max_age:
+                if cell.genome.exploding:
+                    self.trigger_explosion(cell)
                 cell.death(self.particles)
                 self.cells.remove(cell)
                 cell.remove_from_space(self.space)
@@ -246,23 +281,25 @@ class Game:
             nearby_objects = self.find_objects_within_radius(cell, cell.genome.detection_radius)
 
             for obj in nearby_objects:
-                if isinstance(obj, Particle) and distance(cell, obj) < cell.genome.size:
+                if isinstance(obj, Particle) and distance(cell, obj) < cell.size:
                     cell.consume_particle(obj.mass, obj.r, obj.g, obj.b)
                     self.consumed_particles.append(obj)
 
         to_remove = set(self.consumed_particles)
         self.particles = [p for p in self.particles if p not in to_remove]
 
-        to_remove_cells = set()
 
+        # check if cell eat other cells
         for cell in self.cells:
-            for other_cell in self.cells:
-                if other_cell != cell and other_cell not in to_remove_cells:
-                    if distance(cell, other_cell) < cell.genome.size + other_cell.genome.size:
-                        cell.consume_cell(other_cell, self.cells, self.particles, self.space, to_remove_cells)
+            nearby_objects = self.find_objects_within_radius(cell, cell.genome.detection_radius)
+            for obj in nearby_objects:
+                if isinstance(obj, Cell) and (obj != cell) and (obj not in self.to_remove_cells):
+                    if distance(cell, obj) < cell.size + obj.size:
+                        cell.consume_cell(obj, self.cells, self.particles, self.space, self.to_remove_cells)
 
         # After looping, remove all marked cells
-        for dead in to_remove_cells:
+        for dead in self.to_remove_cells:
+            dead.age = dead.genome.max_age
             if dead in self.cells:
                 self.cells.remove(dead)
 
@@ -273,6 +310,9 @@ class Game:
                 nearby_objects = self.find_objects_within_radius(cell, cell.genome.detection_radius)
 
                 cell.body.velocity = CellAI(cell.genome.r, cell.genome.g, cell.genome.b).decide(cell, nearby_objects)
+
+        for cell in self.cells:
+            self.handle_wrap_around(cell)
 
         self.update_grid()
 
@@ -290,7 +330,7 @@ class Game:
         for particle in self.particles:
             particle.draw_particle(self.screen, offset=camera_offset)
 
-        #self.draw_walls(self.game_surface)
+        self.draw_walls(self.screen, offset=camera_offset)
 
         fps = self.clock.get_fps()
         fps_text = self.font.render(f"FPS: {fps:.2f}", True, pygame.Color("white"))

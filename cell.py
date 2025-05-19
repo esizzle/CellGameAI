@@ -12,7 +12,8 @@ class Cell(PhysicsParticle):
     def __init__(self, position: tuple, chromosome: list, active_gene: int = 0, is_player: bool = False, has_split: bool = False):
         self.chromosome = chromosome
         self.genome = chromosome[active_gene]
-        density = self.genome.size/self.genome.start_mass
+        self.size = self.genome.start_mass // 2
+        density = self.size/self.genome.start_mass
         super().__init__(self.genome.start_mass,self.genome.charge,density,position)
         self.age = 0
         self.is_player = is_player
@@ -24,14 +25,14 @@ class Cell(PhysicsParticle):
             pass
 
         # pymunk
-        moment = pymunk.moment_for_circle(self.mass, 0, self.genome.size)
+        moment = pymunk.moment_for_circle(self.mass, 0, self.size)
         self.create_body(moment)
-        self.create_circle(self.genome.size)
+        self.create_circle(self.size)
 
     # draw cell onto screen
     def draw_cell(self, surface, offset=(0, 0)):
         x, y = self.body.position[0] + offset[0], self.body.position[1] + offset[1]
-        pygame.draw.circle(surface, (self.genome.r, self.genome.g, self.genome.b), (int(x), int(y)), self.genome.size, self.genome.thickness)
+        pygame.draw.circle(surface, (self.genome.r, self.genome.g, self.genome.b), (int(x), int(y)), self.size, self.genome.thickness)
 
     def draw_split_cell(self, screen):
         animate_split = 0
@@ -43,6 +44,7 @@ class Cell(PhysicsParticle):
     # change cell mass
     def calculate_mass(self, mass):
         self.mass += mass
+        self.size = self.mass // 2
 
 
     # change cell colour
@@ -75,11 +77,20 @@ class Cell(PhysicsParticle):
         self.calculate_colour(mass, r,g,b)
 
     def consume_cell(self, other, cells, particles, space, to_remove_cells):
-        if (self.genome.strength > other.genome.thickness) and (self.genome.size > other.genome.size):
+        #if (self.genome.strength > other.genome.thickness) and (self.genome.size > other.genome.size):
+        if (self.mass > (4 * other.mass/3)) and (other.genome.thickness == 1):
+        # if self.genome.strength > other.genome.thickness:
             other.death(particles)
             other.remove_from_space(space)
-            self.chromosome.append(other.genome)
+            # self.chromosome.append(other.genome)
             to_remove_cells.add(other)
+
+        '''elif  (self.mass > (2 * other.mass)) and (other.genome.thickness == 2):
+            other.death(particles)
+            other.remove_from_space(space)
+            # self.chromosome.append(other.genome)
+            to_remove_cells.add(other)'''
+
 
     def split(self,cells,space):
         if self.mass >= self.genome.max_mass:
@@ -118,10 +129,12 @@ class Cell(PhysicsParticle):
             for i in range(self.mass):
                 # create a new cell
                 theta = i*2*math.pi/self.mass
-                particle_x = self.body.position[0] + math.cos(theta)*self.genome.size*4/3
-                particle_y = self.body.position[1] + math.sin(theta)*self.genome.size*4/3
+                particle_x = self.body.position[0] + math.cos(theta)*self.size
+                particle_y = self.body.position[1] + math.sin(theta)*self.size
                 # get new color value
+
                 color = random.randint(1, 3)
+
                 if color == 1:
                     particle = Particle((particle_x, particle_y), 255, 0, 0)
                     self.calculate_colour(1, 0, 255, 255)
@@ -136,8 +149,8 @@ class Cell(PhysicsParticle):
 
 class Genome:
     def __init__(self, r: int = 255, g: int = 255, b: int = 255, size: int = 10, start_mass: int = 20, max_mass: int = 40,
-                 thickness: int = 1, strength: int = 1, speed: int = 50, detection_radius: int = 1, max_age: int = 5, charge: int = 0,
-                 mutation_rate: float = 0.1, multi_cell: bool = False, aggression: float = 1, caution: float = 1
+                 thickness: int = 1, strength: int = 1, speed: int = 50, detection_radius: int = 1, max_age: int = 30, charge: int = 0,
+                 mutation_rate: float = 0.1, exploding: bool = False, multi_cell: bool = False, aggression: float = 1, caution: float = 1
                 ):
 
         # Physical
@@ -154,6 +167,7 @@ class Genome:
         self.max_age = max_age
         self.charge = charge
         self.mutation_rate = mutation_rate
+        self.exploding = exploding
         self.multi_cell = multi_cell
 
         # Behavioral
@@ -170,25 +184,42 @@ class Genome:
                 self.aggression -= random.uniform(1.0,5.0)
                 if self.aggression < 0.1:
                     self.aggression = 0.1
-            if random.random() < self.mutation_rate:
+            '''if random.random() < self.mutation_rate:
                 self.size += random.randint(1,5)
                 self.max_mass += random.randint(1,5)
                 self.speed -= random.randint(0,10)
 
                 # clamp speed
                 if self.speed < 1:
-                    self.speed = 1
-            if random.random() < self.mutation_rate:
+                    self.speed = 1'''
+            '''if random.random() < self.mutation_rate:
                 self.start_mass += random.randint(5,10)
-                self.max_mass = 2*self.start_mass
+                self.max_mass = 2*self.start_mass'''
+
+            # thicker membrane // slower movement speed
             if random.random() < self.mutation_rate:
                 self.thickness = 2
                 self.speed -= random.randint(1,5)
                 if self.speed < 1:
                     self.speed = 1
 
+            # faster movement speed // smaller particle
             if random.random() < self.mutation_rate:
-                self.max_age += random.randint(1,5)
+                self.speed += random.randint(1,5)
+                self.start_mass -= random.randint(1,10)
+                if self.start_mass < 5:
+                    self.start_mass = 5
+                self.max_mass = 2*self.start_mass
+
+            # faster movement speed // smaller cell wall
+            if self.thickness == 2:
+                if random.random() < self.mutation_rate:
+                    self.speed += random.randint(1,5)
+                    self.thickness = 1
+
+
+            '''if random.random() < self.mutation_rate:
+                self.max_age += random.randint(1,5)'''
 
         # offense:
         elif self.g == 255:
@@ -196,14 +227,14 @@ class Genome:
                 self.aggression += random.uniform(1.0,5.0)
             if random.random() < self.mutation_rate:
                 self.caution -= random.uniform(1.0,5.0)
-            if random.random() < self.mutation_rate:
+            '''if random.random() < self.mutation_rate:
                 self.strength = random.randint(1,2)
             if random.random() < self.mutation_rate:
                 self.speed += random.randint(10,25)
                 self.size -= random.randint(1,5)
                 if self.size < 1:
-                    self.size = 1
-            if random.random() < self.mutation_rate:
+                    self.size = 1'''
+            '''if random.random() < self.mutation_rate:
                 self.start_mass -= random.randint(1,5)
                 self.max_mass = 2 * self.start_mass
                 if self.start_mass < 5:
@@ -215,11 +246,24 @@ class Genome:
             if random.random() < self.mutation_rate:
                 self.detection_radius = random.randint(1, 3)
             if random.random() < self.mutation_rate:
-                self.mutation_rate += random.uniform(0.01, 0.05)
+                self.mutation_rate += random.uniform(0.01, 0.05)'''
+            # increased start size // slower movement speed
+            if random.random() < self.mutation_rate:
+                self.size += random.randint(1,5)
+                self.start_mass += random.randint(5,10)
+                self.max_mass = 2*self.start_mass
+                self.speed -= random.randint(1,10)
+
+                if self.speed < 1:
+                    self.speed = 1
+
 
         # special: charge = +/- 1, mutation_rate = rand(0.1,0.9), multi_cell = true
         else:
+            # exploding cells
             if random.random() < self.mutation_rate:
+                self.exploding = True
+            '''if random.random() < self.mutation_rate:
                 self.detection_radius -= random.randint(1, 5)
             if random.random() < self.mutation_rate:
                 self.thickness = random.choice([1,2])
@@ -230,7 +274,7 @@ class Genome:
                 self.g = 255
                 self.b = 255
             if random.random() < self.mutation_rate:
-                self.multi_cell = True
+                self.multi_cell = True'''
 
     def __str__(self):
         return '''PHYSICAL: color: {self.r}, {self.g}, {self.b}, size: {self.size}, start_mass: {self.start_mass}, max_mass: {self.max_mass}, 
