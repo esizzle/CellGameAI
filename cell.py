@@ -206,17 +206,19 @@ class Genome:
             # faster movement speed // smaller particle
             if random.random() < self.mutation_rate:
                 self.speed += random.randint(1,5)
-                self.start_mass -= random.randint(1,10)
+                self.start_mass -= random.randint(1, 10)
                 if self.start_mass < 5:
                     self.start_mass = 5
                 self.max_mass = 2*self.start_mass
+                self.max_age -= random.randint(1, 5)
+                if self.max_age < 5:
+                    self.max_age = 5
 
             # faster movement speed // smaller cell wall
             if self.thickness == 2:
                 if random.random() < self.mutation_rate:
                     self.speed += random.randint(1,5)
                     self.thickness = 1
-
 
             '''if random.random() < self.mutation_rate:
                 self.max_age += random.randint(1,5)'''
@@ -253,10 +255,10 @@ class Genome:
                 self.start_mass += random.randint(5,10)
                 self.max_mass = 2*self.start_mass
                 self.speed -= random.randint(1,10)
+                self.max_age += random.randint(1, 5)
 
                 if self.speed < 1:
                     self.speed = 1
-
 
         # special: charge = +/- 1, mutation_rate = rand(0.1,0.9), multi_cell = true
         else:

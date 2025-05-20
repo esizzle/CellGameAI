@@ -122,7 +122,7 @@ class Game:
             obj.body.position = (x, 0 + obj.size)
 
 
-    def draw_walls(self, surface,  offset=(0, 0)):
+    def draw_walls(self, surface, offset =(0, 0)):
         wall_color = (255, 255, 255)
         pygame.draw.line(surface, wall_color, (0 + offset[0], 0 + offset[1]), (self.screen_width + offset[0], 0 + offset[1]), 2)  # Top
         pygame.draw.line(surface, wall_color, (0 + offset[0], self.screen_height + offset[1]), (self.screen_width + offset[0], self.screen_height + offset[1]),
@@ -130,6 +130,12 @@ class Game:
         pygame.draw.line(surface, wall_color, (0 + offset[0], 0 + offset[1]), (0 + offset[0], self.screen_height + offset[1]), 2)  # Left
         pygame.draw.line(surface, wall_color, (self.screen_width + offset [0], 0 + offset[1]), (self.screen_width + offset[0], self.screen_height + offset[1]),
                          1)  # Right
+
+    def draw_grid(self, surface, offset=(0,0)):
+        for x in range(0, self.screen_width, self.grid_size):
+            pygame.draw.line(surface, (50, 50, 50), (x + offset[0], 0 + offset[1]), (x + offset[0], self.screen_height + offset[1]))  # vertical lines
+        for y in range(0, self.screen_height, self.grid_size):
+            pygame.draw.line(surface, (50, 50, 50), (0 + offset[0], y + offset[1]), (self.screen_width + offset[0], y + offset[1]))  # horizontal lines
 
     # Create the collision handler (outside the game loop)
     def begin_collision(self, arbiter, space, data):
@@ -331,6 +337,7 @@ class Game:
             particle.draw_particle(self.screen, offset=camera_offset)
 
         self.draw_walls(self.screen, offset=camera_offset)
+        self.draw_grid(self.screen, offset=camera_offset)
 
         fps = self.clock.get_fps()
         fps_text = self.font.render(f"FPS: {fps:.2f}", True, pygame.Color("white"))
