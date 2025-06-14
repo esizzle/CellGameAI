@@ -284,7 +284,16 @@ class Genome:
                 self.max_age += random.randint(1,5)'''
 
             if random.random() < self.mutation_rate:
-                self.perception["r"] = True
+                if not (self.perception["b"] and self.perception["g"]):
+                    self.perception["r"] = True
+
+            if random.random() < self.mutation_rate:
+                if self.perception["g"]:
+                    self.perception["g"] = False
+
+            if random.random() < self.mutation_rate:
+                if self.perception["b"]:
+                    self.perception["b"] = False
 
         # offense:
         elif self.g == 255:
@@ -327,7 +336,16 @@ class Genome:
                 self.thickness = 1
 
             if random.random() < self.mutation_rate:
-                self.perception["g"] = True
+                if not (self.perception["r"] and self.perception["b"]):
+                    self.perception["g"] = True
+
+            if random.random() < self.mutation_rate:
+                if self.perception["r"]:
+                    self.perception["r"] = False
+
+            if random.random() < self.mutation_rate:
+                if self.perception["b"]:
+                    self.perception["b"] = False
 
         # special: charge = +/- 1, mutation_rate = rand(0.1,0.9), multi_cell = true
         else:
@@ -337,7 +355,16 @@ class Genome:
             if random.random() < self.mutation_rate:
                 self.thickness = 1
             if random.random() < self.mutation_rate:
-                self.perception["b"] = True
+                if not (self.perception["r"] and self.perception["g"]):
+                    self.perception["b"] = True
+
+            if random.random() < self.mutation_rate:
+                if self.perception["r"]:
+                    self.perception["r"] = False
+
+            if random.random() < self.mutation_rate:
+                if self.perception["g"]:
+                    self.perception["g"] = False
             '''if random.random() < self.mutation_rate:
                 self.detection_radius -= random.randint(1, 5)
             if random.random() < self.mutation_rate:
