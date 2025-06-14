@@ -10,8 +10,11 @@ class Particle:
         self.mass = mass
         self.size = size
 
-    def draw_particle(self, surface, offset=(0, 0)):
-        x, y = self.position[0] + offset[0], self.position[1] + offset[1]
-        pygame.draw.circle(surface, (self.r, self.g, self.b), (int(x), int(y)), self.size)
+    def draw(self, perceived_color, surface, zoom_factor = 1.0, offset=(0, 0)):
+        if self.size * zoom_factor < 1:
+            pass
+        else:
+            x, y = self.position[0]*zoom_factor + offset[0], self.position[1]*zoom_factor + offset[1]
+            pygame.draw.circle(surface, perceived_color, (int(x), int(y)), self.size*zoom_factor, width= 1)
 
 

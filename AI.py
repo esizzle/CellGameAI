@@ -1,5 +1,5 @@
 import random
-from interactions import distance
+from interactions import distance_squared
 from cell import Cell
 from particle import Particle
 
@@ -41,16 +41,16 @@ class CellAI:
 
         for particle in particles:
             if particle.r == self.r:
-                dist = distance(cell, particle) * 0.5
+                dist = distance_squared(cell, particle) * 0.5
 
             elif particle.g == self.g:
-                dist = distance(cell, particle) * 0.5
+                dist = distance_squared(cell, particle) * 0.5
 
             elif particle.b == self.b:
-                dist = distance(cell, particle) * 0.5
+                dist = distance_squared(cell, particle) * 0.5
 
             else:
-                dist = distance(cell, particle)
+                dist = distance_squared(cell, particle)
 
             distance_particle[dist] = particle
             distances.append(dist)
@@ -59,8 +59,8 @@ class CellAI:
         safe_direction = [0, 0]
         for other in other_cells:
             if other != cell and other.genome.size > cell.genome.size * 1.2:  # Only consider larger cells
-                d = distance(cell, other)
-                if d < cell.genome.size * 3:  # If too close, move away
+                d = distance_squared(cell, other)
+                if d < ((cell.genome.size * 3)**2) and (d != 0):  # If too close, move away
                     safe_direction[0] -= (other.position[0] - cell.position[0]) / d
                     safe_direction[1] -= (other.position[1] - cell.position[1]) / d
 

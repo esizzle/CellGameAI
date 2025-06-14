@@ -3,63 +3,85 @@ import pymunk
 import random
 
 from pygame import VIDEORESIZE
+from pygame.examples.scroll import zoom_factor
 
-from interactions import distance
+from interactions import distance_squared
 from cell import Cell, Genome
 from particle import Particle
 from AI import CellAI
 
 class Game:
-    def __init__(self, width=1920, height=1080):
+    def __init__(self):
         self.font = pygame.font.SysFont("Arcade_Classic", 18)
 
+        self.SCREEN_WIDTH = 1920
+        self.SCREEN_HEIGHT = 1080
+        self.fullscreen = False
+
+        # special controls
+        self.show_grid = False
+
         # Fixed resolution for rendering
-        self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
+        self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT), pygame.RESIZABLE)
+        self.surface = pygame.Surface((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+
+        # get monitor screen
         self.screen_width, self.screen_height = self.screen.get_size()
         print("Screen size:", self.screen_width, self.screen_height)
 
-        self.fullscreen = False
-        self.width = width
-        self.height = height
-        self.world_width = width
-        self.world_height = height
+        # camera and zoom
+        self.zoom_factor = 1.0
+        self.zoom_speed = 0.025
 
-        self.surface = pygame.Surface((self.screen_width, self.screen_height))
+        self.camera_x = 0
+        self.camera_y = 0
+        self.camera_speed = 2
+
+        # physics space
         self.space = pymunk.Space()
 
-        self.clock = pygame.time.Clock()
-        self.run = True
+        # initialize chunks and grid
+        self.grid_size = 120
+        self.chunk_size = 16
+        self.num_chunks_x = 4
+        self.num_chunks_y = 4
 
-        # Initialize grid
-        self.grid_size = 100
+        # chunk and grid properties
+        self.num_columns = self.chunk_size * self.num_chunks_x
+        self.num_rows = self.chunk_size * self.num_chunks_y
+
+        self.world_width = self.num_columns * self.grid_size
+        self.world_height = self.num_rows * self.grid_size
+
         self.grid = {}
+        self.particles = []
 
-        # self.create_walls()
+        self.init_grid()
 
-        # create cells (lists) to store information inside grid
-        for x in range(0, self.screen_width, self.grid_size):
-            for y in range(0, self.screen_height, self.grid_size):
-                self.grid[x // self.grid_size, y // self.grid_size] = []
+        self.chunks = {}
+        for chunk_x in range(self.num_chunks_x):
+            for chunk_y in range(self.num_chunks_y):
+                self.chunks[(chunk_x, chunk_y)] = []
 
         # Initialize player and game objects
         # self.player_speed = 1
         default_genome = Genome()
         init_chromosome = [default_genome]
-        self.player = Cell((self.screen_width / 2, self.screen_height / 2), init_chromosome,is_player = True)
+        spawn_x = random.randint(0, self.world_width)
+        spawn_y = random.randint(0, self.world_height)
+        self.player = Cell((spawn_x, spawn_y), init_chromosome,is_player = True)
         self.player.add_to_space(self.space)
         self.player.set_collision_type(0)
 
-        self.camera_x = self.player.position[0] - self.screen_width // 2
-        self.camera_y = self.player.position[1] - self.screen_height // 2
-        self.camera_speed = 2
-
         self.cells = [self.player]
-        self.particles = self.create_particles(5000)
+        # self.particles = self.create_particles(5000)
         self.consumed_particles = []
         self.to_remove_cells = set()
 
         self.update_grid()
 
+        self.clock = pygame.time.Clock()
+        self.run = True
         self.prev_time = pygame.time.get_ticks()
 
         # handle collisions
@@ -69,13 +91,17 @@ class Game:
         self.handler.post_solve = self.post_collision
         self.handler.separate = self.separate_collision
 
-    def create_particles(self, count):
+    def create_particles(self, count, x_bounds = None, y_bounds = None):
         particles = []
         for _ in range(count):
-            x = random.randint(0, self.screen_width)
-            y = random.randint(0, self.screen_height)
-            color = random.randint(1, 100)
+            if x_bounds and y_bounds:
+                x = random.randint(*x_bounds)
+                y = random.randint(*y_bounds)
+            else:
+                x = random.randint(0, self.screen_width)
+                y = random.randint(0, self.screen_height)
 
+            color = random.randint(1, 100)
             if color <= 33:
                 particle = Particle((x, y), 255, 0, 0)
             elif 33 < color <= 67:
@@ -121,21 +147,22 @@ class Game:
         elif y + obj.size > h:
             obj.body.position = (x, 0 + obj.size)
 
+    def scale(self, pos, offset = (0,0)):
+        return pos[0] * self.zoom_factor + offset[0], pos[1] * self.zoom_factor + offset[1]
 
-    def draw_walls(self, surface, offset =(0, 0)):
+    def draw_walls(self, surface, zoom_factor=1.0, offset=(0, 0)):
         wall_color = (255, 255, 255)
-        pygame.draw.line(surface, wall_color, (0 + offset[0], 0 + offset[1]), (self.screen_width + offset[0], 0 + offset[1]), 2)  # Top
-        pygame.draw.line(surface, wall_color, (0 + offset[0], self.screen_height + offset[1]), (self.screen_width + offset[0], self.screen_height + offset[1]),
-                         1)  # Bottom
-        pygame.draw.line(surface, wall_color, (0 + offset[0], 0 + offset[1]), (0 + offset[0], self.screen_height + offset[1]), 2)  # Left
-        pygame.draw.line(surface, wall_color, (self.screen_width + offset [0], 0 + offset[1]), (self.screen_width + offset[0], self.screen_height + offset[1]),
-                         1)  # Right
 
-    def draw_grid(self, surface, offset=(0,0)):
-        for x in range(0, self.screen_width, self.grid_size):
-            pygame.draw.line(surface, (50, 50, 50), (x + offset[0], 0 + offset[1]), (x + offset[0], self.screen_height + offset[1]))  # vertical lines
-        for y in range(0, self.screen_height, self.grid_size):
-            pygame.draw.line(surface, (50, 50, 50), (0 + offset[0], y + offset[1]), (self.screen_width + offset[0], y + offset[1]))  # horizontal lines
+        top_left = self.scale((0, 0), offset)
+        top_right = self.scale((self.world_width, 0), offset)
+        bottom_left = self.scale((0, self.world_height), offset)
+        bottom_right = self.scale((self.world_width, self.world_height), offset)
+
+        # Draw the four walls
+        pygame.draw.line(surface, wall_color, top_left, top_right, 2)  # Top
+        pygame.draw.line(surface, wall_color, bottom_left, bottom_right, 1)  # Bottom
+        pygame.draw.line(surface, wall_color, top_left, bottom_left, 2)  # Left
+        pygame.draw.line(surface, wall_color, top_right, bottom_right, 1)  # Right
 
     # Create the collision handler (outside the game loop)
     def begin_collision(self, arbiter, space, data):
@@ -154,34 +181,66 @@ class Game:
         # print("Separate")
         pass
 
+    def init_grid(self):
+        self.grid = {}
+
+        for x in range(0, self.world_width, self.grid_size):
+            for y in range(0, self.world_height, self.grid_size):
+                grid_x = x // self.grid_size
+                grid_y = y // self.grid_size
+                self.grid[(grid_x, grid_y)] = []
+
+                # Spawn 24 particles in this cell using create_particles
+                new_particles = self.create_particles(24, (x, x + self.grid_size - 1), (y, y + self.grid_size - 1))
+                self.grid[(grid_x, grid_y)].extend(new_particles)
+                # print(grid_x, grid_y, new_particles, "\n")
+                # self.particles.extend(new_particles)
+
     def update_grid(self):
         for key in self.grid:
-            self.grid[key] = []
+            self.grid[key] = [obj for obj in self.grid[key] if isinstance(obj, Particle)]
 
-        for particle in self.particles:
+        '''for particle in self.particles:
             grid_x = int(particle.position[0] // self.grid_size)
             grid_y = int(particle.position[1] // self.grid_size)
 
             # Clamp grid_x and grid_y to stay within initialized bounds
-            grid_x = max(0, min(grid_x, self.screen_width // self.grid_size - 1))
-            grid_y = max(0, min(grid_y, self.screen_height // self.grid_size - 1))
+            grid_x = max(0, min(grid_x, self.world_width // self.grid_size - 1))
+            grid_y = max(0, min(grid_y, self.world_height // self.grid_size - 1))
 
-            self.grid[grid_x, grid_y].append(particle)
+            self.grid[grid_x, grid_y].append(particle)'''
 
         for cell in self.cells:
             grid_x = int(cell.position[0] // self.grid_size)
             grid_y = int(cell.position[1] // self.grid_size)
 
             # Clamp grid_x and grid_y to stay within initialized bounds
-            grid_x = max(0, min(grid_x, self.screen_width // self.grid_size - 1))
-            grid_y = max(0, min(grid_y, self.screen_height // self.grid_size - 1))
+            grid_x = max(0, min(grid_x, self.world_width // self.grid_size - 1))
+            grid_y = max(0, min(grid_y, self.world_height // self.grid_size - 1))
 
             self.grid[grid_x, grid_y].append(cell)
 
-    def update_camera(self):
-        self.camera_x = self.player.position[0] - self.screen_width / 2
-        self.camera_y = self.player.position[1] - self.screen_height / 2
+    def draw_grid(self, surface, zoom_factor=1.0, offset=(0, 0)):
+        color = (50, 50, 50)
+        scaled_grid_size = self.grid_size * zoom_factor
+        scaled_width = self.world_width * zoom_factor
+        scaled_height = self.world_height * zoom_factor
 
+        # Vertical lines
+        x = 0
+        while x <= scaled_width:
+            start_pos = (x + offset[0], 0 + offset[1])
+            end_pos = (x + offset[0], scaled_height + offset[1])
+            pygame.draw.line(surface, color, start_pos, end_pos)
+            x += scaled_grid_size
+
+        # Horizontal lines
+        y = 0
+        while y <= scaled_height:
+            start_pos = (0 + offset[0], y + offset[1])
+            end_pos = (scaled_width + offset[0], y + offset[1])
+            pygame.draw.line(surface, color, start_pos, end_pos)
+            y += scaled_grid_size
 
     # grid_radius = 1 -> 3x3 grid
     # grid_radius = 2 -> 5x5 grid
@@ -204,18 +263,82 @@ class Game:
 
         return nearby_objects
 
+    def get_objects_in_screen_area(self, obj_type, screen_rect, offset=(0, 0)):
+        visible_objects = []
+
+        # Convert screen rect to world-space coordinates using zoom
+        left = (screen_rect.left - offset[0]) / self.zoom_factor
+        right = (screen_rect.right - offset[0]) / self.zoom_factor
+        top = (screen_rect.top - offset[1]) / self.zoom_factor
+        bottom = (screen_rect.bottom - offset[1]) / self.zoom_factor
+
+        # Clamp to world bounds if needed
+        left = max(0, left)
+        top = max(0, top)
+
+        # Determine visible grid cells in world-space
+        min_grid_x = int(left // self.grid_size)
+        max_grid_x = int(right // self.grid_size)
+        min_grid_y = int(top // self.grid_size)
+        max_grid_y = int(bottom // self.grid_size)
+
+        for grid_x in range(min_grid_x, max_grid_x + 1):
+            for grid_y in range(min_grid_y, max_grid_y + 1):
+                if (grid_x, grid_y) in self.grid:
+                    for obj in self.grid[(grid_x, grid_y)]:
+                        if obj_type == 'particle' and isinstance(obj, Particle):
+                            visible_objects.append(obj)
+                        elif obj_type == 'cell' and isinstance(obj, Cell):
+                            visible_objects.append(obj)
+                        # Add more types as needed
+
+        return visible_objects
+
     def trigger_explosion(self, cell):
         # can be changed for greater explosion radii
+        print("Kaboom!")
         explosion_radius = 1
         nearby_objects = self.find_objects_within_radius(cell, explosion_radius)
 
         for obj in nearby_objects:
             if isinstance(obj, Cell) and (obj != cell) and (obj not in self.to_remove_cells):
-                obj.death(self.particles)
-                obj.age = obj.genome.max_age
-                obj.remove_from_space(self.space)
-                self.cells.remove(obj)
+                    self.to_remove_cells.add(obj)
 
+    def simulate_vision(self, color):
+        r, g, b = color
+        brightness = (r + g + b)//3
+
+        if self.player.genome.perception["r"]:
+            if r < brightness:
+                r = brightness
+            vis_r = r
+        else:
+            vis_r = 0
+
+        if self.player.genome.perception["g"]:
+            if g < brightness:
+                g = brightness
+            vis_g = g
+        else:
+            vis_g = 0
+
+        if self.player.genome.perception["b"]:
+            if b < brightness:
+                b = brightness
+            vis_b = b
+        else:
+            vis_b = 0
+
+        rp = vis_r if vis_r != 0 else brightness
+        gp = vis_g if vis_g != 0 else brightness
+        bp = vis_b if vis_b != 0 else brightness
+
+        perceived_color = rp, gp, bp
+        return perceived_color
+
+    def update_camera(self):
+        self.camera_x = (self.player.position[0] * self.zoom_factor) - self.screen_width / 2
+        self.camera_y = (self.player.position[1] * self.zoom_factor) - self.screen_height / 2
 
     def handle_input(self):
         for event in pygame.event.get():
@@ -230,8 +353,28 @@ class Game:
                     self.fullscreen = not self.fullscreen
                     if self.fullscreen:
                         self.screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
+                        self.screen_width, self.screen_height = self.screen.get_size()
                     else:
-                        self.screen = pygame.display.set_mode((self.width, self.height))
+                        self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+                        self.screen_width, self.screen_height = self.screen.get_size()
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                world_x = (mouse_x + self.camera_x) / self.zoom_factor
+                world_y = (mouse_y + self.camera_y) / self.zoom_factor
+
+                if event.button == 4:  # Scroll up to zoom in
+                    if self.player.age >= self.player.genome.max_age:
+                        self.zoom_factor += self.zoom_speed
+                elif event.button == 5:  # Scroll down to zoom out
+                    if self.player.age >= self.player.genome.max_age:
+                        self.zoom_factor = max(self.zoom_factor - self.zoom_speed, 0.01)
+                else:
+                    pass
+
+                # Recalculate camera offset to keep world_x/y under the cursor fixed
+                self.camera_x = -mouse_x + world_x * self.zoom_factor
+                self.camera_y = -mouse_y + world_y * self.zoom_factor
 
         keys = pygame.key.get_pressed()
         speed = self.camera_speed * (2 if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1)
@@ -259,67 +402,86 @@ class Game:
             else:
                 self.player.body.velocity = self.player.body.velocity[0], self.player.genome.speed
 
+        if keys[pygame.K_k]:
+            self.player.age = self.player.genome.max_age + 1
+
+        if keys[pygame.K_g]:
+            self.show_grid = not self.show_grid
+
         if self.player.age < self.player.genome.max_age:
             self.update_camera()
 
     def update(self, delta_time):
         for cell in self.cells:
+            cell.update()
             cell.age += delta_time
+            nearby_objects = self.find_objects_within_radius(cell, cell.genome.detection_radius)
+
+            for obj in nearby_objects:
+                # if particle check consumed by cell
+                if isinstance(obj, Particle) and distance_squared(cell, obj) < (cell.size ** 2):
+                    if obj in self.consumed_particles:
+                        pass
+                    else:
+                        cell.consume_particle(obj.mass, obj.r, obj.g, obj.b)
+                        self.consumed_particles.append(obj)
+
+                # if cell check consumed by cell
+                if isinstance(obj, Cell) and (obj != cell) and (not obj.dead):
+                    if distance_squared(cell, obj) < ((cell.size + obj.size)**2):
+                            cell.consume_cell(obj, self.to_remove_cells)
+
+            # check if cell can split
+            cell.split(self.cells, self.space)
+            if cell.is_player:
+                self.player = cell
+                self.zoom_factor = 50/cell.genome.size
+
+            # make npc cells decide where to go next
+            if cell != self.player:
+                cell.body.velocity = CellAI(cell.genome.r, cell.genome.g, cell.genome.b).decide(cell, nearby_objects)
+
+            self.handle_wrap_around(cell)
 
             if cell.age >= cell.genome.max_age:
-                if cell.genome.exploding:
-                    self.trigger_explosion(cell)
-                cell.death(self.particles)
-                self.cells.remove(cell)
-                cell.remove_from_space(self.space)
+                '''if cell.genome.exploding:
+                    self.trigger_explosion(cell)'''
+                if cell not in self.to_remove_cells:
+                    self.to_remove_cells.add(cell)
 
                 if cell == self.player:
                     #  self.run = False
                     pass
-        for cell in self.cells:
-            cell.split(self.cells,self.space)
-            if cell.is_player:
-                self.player = cell
 
+        for p in self.consumed_particles[:]:  # Iterate over a copy
+            grid_x = int(p.position[0] // self.grid_size)
+            grid_y = int(p.position[1] // self.grid_size)
 
-        # only using nearby particles, check if cell is eating a particle
-        for cell in self.cells:
-            nearby_objects = self.find_objects_within_radius(cell, cell.genome.detection_radius)
+            if (grid_x, grid_y) in self.grid:
+                try:
+                    self.grid[grid_x, grid_y].remove(p)
+                except ValueError:
+                    print(f"[Warning] Tried to remove particle from grid ({grid_x},{grid_y}) but it wasn't found.")
 
-            for obj in nearby_objects:
-                if isinstance(obj, Particle) and distance(cell, obj) < cell.size:
-                    cell.consume_particle(obj.mass, obj.r, obj.g, obj.b)
-                    self.consumed_particles.append(obj)
-
-        to_remove = set(self.consumed_particles)
-        self.particles = [p for p in self.particles if p not in to_remove]
-
-
-        # check if cell eat other cells
-        for cell in self.cells:
-            nearby_objects = self.find_objects_within_radius(cell, cell.genome.detection_radius)
-            for obj in nearby_objects:
-                if isinstance(obj, Cell) and (obj != cell) and (obj not in self.to_remove_cells):
-                    if distance(cell, obj) < cell.size + obj.size:
-                        cell.consume_cell(obj, self.cells, self.particles, self.space, self.to_remove_cells)
+            self.consumed_particles.remove(p)
 
         # After looping, remove all marked cells
         for dead in self.to_remove_cells:
             dead.age = dead.genome.max_age
+            # dead.death(self.grid, self.grid_size)
+            grid_x = int(dead.position[0]) // self.grid_size
+            grid_y = int(dead.position[1]) // self.grid_size
+            x = grid_x * self.grid_size
+            y = grid_y * self.grid_size
+
+            # Spawn 24 particles in this cell using create_particles
+            new_particles = self.create_particles(dead.mass, (x, x + self.grid_size - 1), (y, y + self.grid_size - 1))
+            self.grid[(grid_x, grid_y)].extend(new_particles)
+            dead.remove_from_space(self.space)
             if dead in self.cells:
                 self.cells.remove(dead)
 
-        for cell in self.cells:
-            cell.update()
-            if cell != self.player:
-                radius = 100 # temporary for testing
-                nearby_objects = self.find_objects_within_radius(cell, cell.genome.detection_radius)
-
-                cell.body.velocity = CellAI(cell.genome.r, cell.genome.g, cell.genome.b).decide(cell, nearby_objects)
-
-        for cell in self.cells:
-            self.handle_wrap_around(cell)
-
+        self.to_remove_cells.clear()
         self.update_grid()
 
     def render(self):
@@ -328,16 +490,24 @@ class Game:
         # Calculate the camera offset
         camera_offset = (-self.camera_x, -self.camera_y)
 
-        # Draw cells with camera offset
+        # Draw cells with camera offsetsAWa
         for cell in self.cells:
-            cell.draw_cell(self.screen, offset=camera_offset)
+            self.render_if_visible(cell, self.screen, camera_offset, self.screen_width, self.screen_height)
+            #cell.draw(self.screen, offset=camera_offset)
 
         # Draw particles with camera offset
-        for particle in self.particles:
-            particle.draw_particle(self.screen, offset=camera_offset)
+        if self.zoom_factor < 1:
+            pass
+        else:
+            visible_particles = self.get_objects_in_screen_area('particle', screen_rect= self.screen.get_rect(), offset= camera_offset)
+            for particle in visible_particles:
+                self.render_if_visible(particle, self.screen, camera_offset, self.screen_width, self.screen_height)
+            # particle.draw_particle(self.screen, offset=camera_offset)
 
-        self.draw_walls(self.screen, offset=camera_offset)
-        self.draw_grid(self.screen, offset=camera_offset)
+        self.draw_walls(self.screen, self.zoom_factor, offset=camera_offset)
+
+        if self.show_grid:
+            self.draw_grid(self.screen, self.zoom_factor, offset=camera_offset)
 
         fps = self.clock.get_fps()
         fps_text = self.font.render(f"FPS: {fps:.2f}", True, pygame.Color("white"))
@@ -345,8 +515,36 @@ class Game:
 
         pygame.display.flip()
 
+    def render_if_visible(self, obj, surface, camera_offset, screen_width, screen_height):
+        # Assume obj has a `draw(surface, camera_offset)` method
+        # and a `.position` or `.body.position` attribute in world space
+
+        # Get object's position
+        if hasattr(obj, "body"):  # e.g., a physics object like a Cell
+            pos = obj.body.position
+            r,g,b = obj.genome.r, obj.genome.g, obj.genome.b
+        elif hasattr(obj, "position"):  # e.g., a particle or wall
+            pos = obj.position
+            r,g,b = obj.r, obj.g, obj.b
+        else:
+            return  # Can't render if position isn't known
+
+        # Compute screen-relative position
+        screen_x = pos[0]*self.zoom_factor + camera_offset[0]
+        screen_y = pos[1]*self.zoom_factor + camera_offset[1]
+
+        # Check if object is within visible screen bounds (+buffer optional)
+        buffer = 50  # To avoid pop-in if needed
+        if (-buffer <= screen_x <= screen_width + buffer) and (-buffer <= screen_y <= screen_height + buffer):
+            perceived_color = self.simulate_vision((r,g,b))
+            obj.draw(perceived_color, surface, self.zoom_factor, camera_offset)
+
     def run_game_loop(self):
         prev_cell_len = 0
+        prev_particle_len = 5000
+        prev_total_cell_mass = 0
+        prev_total_mass = 0
+        prev_zoom_factor = 0
         while self.run:
             delta_time = self.clock.tick(60) / 1000.0
             current_time = pygame.time.get_ticks()
@@ -358,10 +556,35 @@ class Game:
             self.render()
             self.space.step(delta_time)
 
+            '''if self.zoom_factor != prev_zoom_factor:
+                print("Zoom level:", self.zoom_factor)
+                prev_zoom_factor = self.zoom_factor'''
 
-            if prev_cell_len != len(self.cells):
+            print("Player Color:", self.player.genome.r, self.player.genome.g, self.player.genome.b)
+
+
+            '''if prev_cell_len != len(self.cells):
                 print("Amount of cells: ", len(self.cells))
-                prev_cell_len = len(self.cells)
+                prev_cell_len = len(self.cells)'''
+
+            # check if any grid cells are referencing the same list
+
+            '''if prev_particle_len != len(self.particles):
+                print("Amount of particles:", len(self.particles))
+                prev_particle_len = len(self.particles)
+
+            total_cell_mass = 0
+            for cell in self.cells:
+                total_cell_mass += cell.mass
+
+            if prev_total_cell_mass != total_cell_mass:
+                print("Total cell mass:", total_cell_mass)
+
+            total_mass = total_cell_mass + len(self.particles)
+            print("Total Mass:", total_mass)
+            print("\n")'''
+
+
 
 
         pygame.quit()

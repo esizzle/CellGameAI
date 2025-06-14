@@ -18,6 +18,7 @@ class Cell(PhysicsParticle):
         self.age = 0
         self.is_player = is_player
         self.has_split = has_split
+        self.dead = False
 
         if self.is_player:
             self.max_age = 100000
@@ -30,9 +31,9 @@ class Cell(PhysicsParticle):
         self.create_circle(self.size)
 
     # draw cell onto screen
-    def draw_cell(self, surface, offset=(0, 0)):
-        x, y = self.body.position[0] + offset[0], self.body.position[1] + offset[1]
-        pygame.draw.circle(surface, (self.genome.r, self.genome.g, self.genome.b), (int(x), int(y)), self.size, self.genome.thickness)
+    def draw(self, perceived_color, surface, zoom_factor = 1.0, offset=(0, 0)):
+        x, y = self.body.position[0]*zoom_factor + offset[0], self.body.position[1]*zoom_factor + offset[1]
+        pygame.draw.circle(surface, perceived_color, (int(x), int(y)), self.size*zoom_factor, self.genome.thickness)
 
     def draw_split_cell(self, screen):
         animate_split = 0
@@ -72,17 +73,17 @@ class Cell(PhysicsParticle):
         if self.genome.b < 0:
             self.genome.b = 0
 
+
+
+
     def consume_particle(self, mass, r,g,b):
         self.calculate_mass(mass)
         self.calculate_colour(mass, r,g,b)
 
-    def consume_cell(self, other, cells, particles, space, to_remove_cells):
-        #if (self.genome.strength > other.genome.thickness) and (self.genome.size > other.genome.size):
+    def consume_cell(self, other, to_remove_cells):
         if (self.mass > (4 * other.mass/3)) and (other.genome.thickness == 1):
-        # if self.genome.strength > other.genome.thickness:
-            other.death(particles)
-            other.remove_from_space(space)
             # self.chromosome.append(other.genome)
+            other.dead = True
             to_remove_cells.add(other)
 
         '''elif  (self.mass > (2 * other.mass)) and (other.genome.thickness == 2):
@@ -92,7 +93,8 @@ class Cell(PhysicsParticle):
             to_remove_cells.add(other)'''
 
 
-    def split(self,cells,space):
+    def split(self,cells, space):
+
         if self.mass >= self.genome.max_mass:
             new_chrome1 = []
             new_chrome2 = []
@@ -113,43 +115,100 @@ class Cell(PhysicsParticle):
 
             new_cell1 = Cell(pos1,new_chrome1,active_gene1)
             new_cell2 = Cell(pos2,new_chrome2,active_gene2)
+            '''new_mass = new_cell1.genome.start_mass + new_cell2.genome.start_mass
+
+            # effort to maintain mass in the system (matter aint created nor destroyed)
+            # 1. make sure mass isnt created
+            while new_mass > self.mass:
+                cell = random.randint(1,2)
+                if cell == 1:
+                    new_cell1.genome.start_mass -= 1
+                else:
+                    new_cell2.genome.start_mass -=1
+
+                new_mass = new_cell1.genome.start_mass + new_cell2.genome.start_mass
+
+            # 2. make sure mass isnt destroyed
+            if new_mass < self.mass:
+                for i in range(self.mass - new_mass):
+                    # create a new cell
+                    theta = i * 2 * math.pi / (self.mass - new_mass)
+                    particle_x = self.body.position[0] + math.cos(theta) * max(new_cell1.size, new_cell2.size)
+                    particle_y = self.body.position[1] + math.sin(theta) * max(new_cell1.size, new_cell2.size)
+                    # get new color value
+
+                    color = random.randint(1, 3)
+
+                    if color == 1:
+                        particle = Particle((particle_x, particle_y), 255, 0, 0)
+                        self.calculate_colour(1, 0, 255, 255)
+                    elif color == 2:
+                        particle = Particle((particle_x, particle_y), 0, 255, 0)
+                        self.calculate_colour(1, 255, 0, 255)
+                    else:
+                        particle = Particle((particle_x, particle_y), 0, 0, 255)
+                        self.calculate_colour(1, 255, 255, 0)
+                    particles.append(particle)
+
+            print("\n")
+            print("Old Cell Mass:", self.mass)
+            print("New Cell 1 Mass:", new_cell1.genome.start_mass)
+            print("New Cell 1 Max Mass:", new_cell1.genome.max_mass)
+            print("New Cell 2 Mass:", new_cell2.genome.start_mass)
+            print("New Cell 2 Max Mass:", new_cell2.genome.max_mass)
+            print("\n")'''
 
             if self.is_player:
                 new_cell1.is_player = True
 
             cells.remove(self)
             cells.append(new_cell1)
-            cells.append(new_cell2)
             new_cell1.add_to_space(space)
-            new_cell2.add_to_space(space)
-            new_cell1.set_collision_type(len(cells)-1)
-            new_cell2.set_collision_type(len(cells))
+            new_cell1.set_collision_type(len(cells) - 1)
 
-    def death(self,particles):
-            for i in range(self.mass):
-                # create a new cell
-                theta = i*2*math.pi/self.mass
-                particle_x = self.body.position[0] + math.cos(theta)*self.size
-                particle_y = self.body.position[1] + math.sin(theta)*self.size
-                # get new color value
+            if len(cells) < 400:
+                cells.append(new_cell2)
+                new_cell2.add_to_space(space)
+                new_cell2.set_collision_type(len(cells))
 
-                color = random.randint(1, 3)
+    def death(self,grid, grid_size):
+        grid_x = int(self.position[0] // grid_size)
+        grid_y = int(self.position[1] // grid_size)
+        particles = []
+        '''if self.dead:
+            print(f"[Warning] Tried to kill already-dead cell: {self}")
+            return
+        self.dead = True'''
+        print(f"{self} died with mass {self.mass}")
 
-                if color == 1:
-                    particle = Particle((particle_x, particle_y), 255, 0, 0)
-                    self.calculate_colour(1, 0, 255, 255)
-                elif color == 2:
-                    particle = Particle((particle_x, particle_y), 0, 255, 0)
-                    self.calculate_colour(1, 255, 0, 255)
-                else:
-                    particle = Particle((particle_x, particle_y), 0, 0, 255)
-                    self.calculate_colour(1, 255, 255, 0)
-                particles.append(particle)
+        for i in range(self.mass):
+            # create a new cell
+            theta = i*2*math.pi/self.mass
+            particle_x = (self.body.position[0] + math.cos(theta)*self.size)
+            particle_y = (self.body.position[1] + math.sin(theta)*self.size)
+            # get new color value
+
+            color = random.randint(1, 3)
+
+            if color == 1:
+                particle = Particle((particle_x, particle_y), 255, 0, 0)
+                self.calculate_colour(1, 0, 255, 255)
+            elif color == 2:
+                particle = Particle((particle_x, particle_y), 0, 255, 0)
+                self.calculate_colour(1, 255, 0, 255)
+            else:
+                particle = Particle((particle_x, particle_y), 0, 0, 255)
+                self.calculate_colour(1, 255, 255, 0)
+
+            particles.append(particle)
+        grid[(grid_x,grid_y)].extend(particles)
+
+
 
 
 class Genome:
     def __init__(self, r: int = 255, g: int = 255, b: int = 255, size: int = 10, start_mass: int = 20, max_mass: int = 40,
-                 thickness: int = 1, strength: int = 1, speed: int = 50, detection_radius: int = 1, max_age: int = 30, charge: int = 0,
+                 thickness: int = 1, strength: int = 1, speed: int = 50, perception = {"r": False, "g": False, "b": False}, detection_radius: int = 1, max_age: int = 30, charge: int = 0,
                  mutation_rate: float = 0.1, exploding: bool = False, multi_cell: bool = False, aggression: float = 1, caution: float = 1
                 ):
 
@@ -163,6 +222,7 @@ class Genome:
         self.thickness = thickness
         self.strength = strength
         self.speed = speed
+        self.perception = perception
         self.detection_radius = detection_radius
         self.max_age = max_age
         self.charge = charge
@@ -206,22 +266,25 @@ class Genome:
             # faster movement speed // smaller particle
             if random.random() < self.mutation_rate:
                 self.speed += random.randint(1,5)
-                self.start_mass -= random.randint(1, 10)
+                self.start_mass -= random.randint(1, 5)
                 if self.start_mass < 5:
                     self.start_mass = 5
                 self.max_mass = 2*self.start_mass
-                self.max_age -= random.randint(1, 5)
+                # self.max_age -= random.randint(1, 5)
                 if self.max_age < 5:
                     self.max_age = 5
 
             # faster movement speed // smaller cell wall
-            if self.thickness == 2:
-                if random.random() < self.mutation_rate:
-                    self.speed += random.randint(1,5)
+            if random.random() < self.mutation_rate:
+                self.speed += random.randint(1,5)
+                if self.thickness == 2:
                     self.thickness = 1
 
             '''if random.random() < self.mutation_rate:
                 self.max_age += random.randint(1,5)'''
+
+            if random.random() < self.mutation_rate:
+                self.perception["r"] = True
 
         # offense:
         elif self.g == 255:
@@ -252,19 +315,29 @@ class Genome:
             # increased start size // slower movement speed
             if random.random() < self.mutation_rate:
                 self.size += random.randint(1,5)
-                self.start_mass += random.randint(5,10)
+                self.start_mass += random.randint(5, 10)
                 self.max_mass = 2*self.start_mass
                 self.speed -= random.randint(1,10)
-                self.max_age += random.randint(1, 5)
+                # self.max_age += random.randint(1, 5)
 
                 if self.speed < 1:
                     self.speed = 1
+
+            if random.random() < self.mutation_rate:
+                self.thickness = 1
+
+            if random.random() < self.mutation_rate:
+                self.perception["g"] = True
 
         # special: charge = +/- 1, mutation_rate = rand(0.1,0.9), multi_cell = true
         else:
             # exploding cells
             if random.random() < self.mutation_rate:
                 self.exploding = True
+            if random.random() < self.mutation_rate:
+                self.thickness = 1
+            if random.random() < self.mutation_rate:
+                self.perception["b"] = True
             '''if random.random() < self.mutation_rate:
                 self.detection_radius -= random.randint(1, 5)
             if random.random() < self.mutation_rate:
@@ -277,6 +350,8 @@ class Genome:
                 self.b = 255
             if random.random() < self.mutation_rate:
                 self.multi_cell = True'''
+
+        self.max_age = self.max_mass
 
     def __str__(self):
         return '''PHYSICAL: color: {self.r}, {self.g}, {self.b}, size: {self.size}, start_mass: {self.start_mass}, max_mass: {self.max_mass}, 
