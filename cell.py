@@ -20,6 +20,9 @@ class Cell(PhysicsParticle):
         self.has_split = has_split
         self.dead = False
 
+        self.color = self.get_dominant_color()
+
+
         if self.is_player:
             self.max_age = 100000
             self.speed = 300
@@ -73,8 +76,15 @@ class Cell(PhysicsParticle):
         if self.genome.b < 0:
             self.genome.b = 0
 
+    def get_dominant_color(self):
+        max_val = max(self.genome.r, self.genome.g, self.genome.b)
 
-
+        if self.genome.r == max_val:
+            return 'r'
+        elif self.genome.g == max_val:
+            return 'g'
+        else:
+            return 'b'
 
     def consume_particle(self, mass, r,g,b):
         self.calculate_mass(mass)
@@ -84,6 +94,7 @@ class Cell(PhysicsParticle):
         if (self.mass > (4 * other.mass/3)) and (other.genome.thickness == 1):
             # self.chromosome.append(other.genome)
             other.dead = True
+            other.age = other.genome.max_age + 1
             to_remove_cells.add(other)
 
         '''elif  (self.mass > (2 * other.mass)) and (other.genome.thickness == 2):
@@ -115,6 +126,7 @@ class Cell(PhysicsParticle):
 
             new_cell1 = Cell(pos1,new_chrome1,active_gene1)
             new_cell2 = Cell(pos2,new_chrome2,active_gene2)
+
             '''new_mass = new_cell1.genome.start_mass + new_cell2.genome.start_mass
 
             # effort to maintain mass in the system (matter aint created nor destroyed)
@@ -209,7 +221,7 @@ class Cell(PhysicsParticle):
 class Genome:
     def __init__(self, r: int = 255, g: int = 255, b: int = 255, size: int = 10, start_mass: int = 20, max_mass: int = 40,
                  thickness: int = 1, strength: int = 1, speed: int = 50, perception = {"r": False, "g": False, "b": False}, detection_radius: int = 1, max_age: int = 30, charge: int = 0,
-                 mutation_rate: float = 0.1, exploding: bool = False, multi_cell: bool = False, aggression: float = 1, caution: float = 1
+                 mutation_rate: float = 0.1, exploding: bool = False, multi_cell: bool = False, behaviour = {'r': 0.0, 'g': 0.0, 'b': 0.0}, aggression: float = 1, caution: float = 1
                 ):
 
         # Physical
@@ -231,6 +243,7 @@ class Genome:
         self.multi_cell = multi_cell
 
         # Behavioral
+        self.behavior = behaviour
         self.aggression = aggression
         self.caution = caution
 
@@ -244,6 +257,16 @@ class Genome:
                 self.aggression -= random.uniform(1.0,5.0)
                 if self.aggression < 0.1:
                     self.aggression = 0.1
+
+            if random.random() < self.mutation_rate:
+                self.behavior['r'] = random.uniform(-1.0, 1.0)
+
+            if random.random() < self.mutation_rate:
+                self.behavior['g'] = random.uniform(-1.0, 1.0)
+
+            if random.random() < self.mutation_rate:
+                self.behavior['b'] = random.uniform(-1.0, 1.0)
+
             '''if random.random() < self.mutation_rate:
                 self.size += random.randint(1,5)
                 self.max_mass += random.randint(1,5)
@@ -295,12 +318,23 @@ class Genome:
                 if self.perception["b"]:
                     self.perception["b"] = False
 
+
         # offense:
         elif self.g == 255:
             if random.random() < self.mutation_rate:
                 self.aggression += random.uniform(1.0,5.0)
+
             if random.random() < self.mutation_rate:
                 self.caution -= random.uniform(1.0,5.0)
+
+            if random.random() < self.mutation_rate:
+                self.behavior['r'] = random.uniform(-1.0, 1.0)
+
+            if random.random() < self.mutation_rate:
+                self.behavior['g'] = random.uniform(-1.0, 1.0)
+
+            if random.random() < self.mutation_rate:
+                self.behavior['b'] = random.uniform(-1.0, 1.0)
             '''if random.random() < self.mutation_rate:
                 self.strength = random.randint(1,2)
             if random.random() < self.mutation_rate:
@@ -349,11 +383,21 @@ class Genome:
 
         # special: charge = +/- 1, mutation_rate = rand(0.1,0.9), multi_cell = true
         else:
+            if random.random() < self.mutation_rate:
+                self.behavior['r'] = random.uniform(-1.0, 1.0)
+
+            if random.random() < self.mutation_rate:
+                self.behavior['g'] = random.uniform(-1.0, 1.0)
+
+            if random.random() < self.mutation_rate:
+                self.behavior['b'] = random.uniform(-1.0, 1.0)
             # exploding cells
             if random.random() < self.mutation_rate:
                 self.exploding = True
+
             if random.random() < self.mutation_rate:
                 self.thickness = 1
+
             if random.random() < self.mutation_rate:
                 if not (self.perception["r"] and self.perception["g"]):
                     self.perception["b"] = True

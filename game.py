@@ -20,6 +20,8 @@ class Game:
 
         # special controls
         self.show_grid = False
+        self.show_colors = False
+        self.old_perception = {"r": False, "g": False, "b": False}
 
         # Fixed resolution for rendering
         self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT), pygame.RESIZABLE)
@@ -35,7 +37,7 @@ class Game:
 
         self.camera_x = 0
         self.camera_y = 0
-        self.camera_speed = 2
+        self.camera_speed = 5
 
         # physics space
         self.space = pymunk.Space()
@@ -150,8 +152,8 @@ class Game:
     def scale(self, pos, offset = (0,0)):
         return pos[0] * self.zoom_factor + offset[0], pos[1] * self.zoom_factor + offset[1]
 
-    def draw_walls(self, surface, zoom_factor=1.0, offset=(0, 0)):
-        wall_color = (255, 255, 255)
+    def draw_walls(self, surface, offset=(0, 0)):
+        wall_color = 255,255,255
 
         top_left = self.scale((0, 0), offset)
         top_right = self.scale((self.world_width, 0), offset)
@@ -296,7 +298,6 @@ class Game:
 
     def trigger_explosion(self, cell):
         # can be changed for greater explosion radii
-        print("Kaboom!")
         explosion_radius = 1
         nearby_objects = self.find_objects_within_radius(cell, explosion_radius)
 
@@ -358,6 +359,21 @@ class Game:
                         self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
                         self.screen_width, self.screen_height = self.screen.get_size()
 
+                if event.key == pygame.K_k:
+                    self.player.age = self.player.genome.max_age + 1
+
+                if event.key == pygame.K_g:
+                    self.show_grid = not self.show_grid
+
+                if event.key == pygame.K_c:
+                    if self.player.age >= self.player.genome.max_age:
+                        self.show_colors = not self.show_colors
+                        if self.show_colors:
+                            self.old_perception = self.player.genome.perception
+                            self.player.genome.perception = {"r": True, "g": True, "b": True}
+                        else:
+                            self.player.genome.perception = self.old_perception
+
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 world_x = (mouse_x + self.camera_x) / self.zoom_factor
@@ -402,11 +418,6 @@ class Game:
             else:
                 self.player.body.velocity = self.player.body.velocity[0], self.player.genome.speed
 
-        if keys[pygame.K_k]:
-            self.player.age = self.player.genome.max_age + 1
-
-        if keys[pygame.K_g]:
-            self.show_grid = not self.show_grid
 
         if self.player.age < self.player.genome.max_age:
             self.update_camera()
@@ -444,8 +455,8 @@ class Game:
             self.handle_wrap_around(cell)
 
             if cell.age >= cell.genome.max_age:
-                '''if cell.genome.exploding:
-                    self.trigger_explosion(cell)'''
+                if cell.genome.exploding:
+                    self.trigger_explosion(cell)
                 if cell not in self.to_remove_cells:
                     self.to_remove_cells.add(cell)
 
@@ -504,7 +515,7 @@ class Game:
                 self.render_if_visible(particle, self.screen, camera_offset, self.screen_width, self.screen_height)
             # particle.draw_particle(self.screen, offset=camera_offset)
 
-        self.draw_walls(self.screen, self.zoom_factor, offset=camera_offset)
+        self.draw_walls(self.screen, offset=camera_offset)
 
         if self.show_grid:
             self.draw_grid(self.screen, self.zoom_factor, offset=camera_offset)
@@ -536,6 +547,7 @@ class Game:
         # Check if object is within visible screen bounds (+buffer optional)
         buffer = 50  # To avoid pop-in if needed
         if (-buffer <= screen_x <= screen_width + buffer) and (-buffer <= screen_y <= screen_height + buffer):
+            # TODO optimize perceived color
             perceived_color = self.simulate_vision((r,g,b))
             obj.draw(perceived_color, surface, self.zoom_factor, camera_offset)
 
@@ -559,9 +571,6 @@ class Game:
             '''if self.zoom_factor != prev_zoom_factor:
                 print("Zoom level:", self.zoom_factor)
                 prev_zoom_factor = self.zoom_factor'''
-
-            print("Player Color:", self.player.genome.r, self.player.genome.g, self.player.genome.b)
-
 
             '''if prev_cell_len != len(self.cells):
                 print("Amount of cells: ", len(self.cells))

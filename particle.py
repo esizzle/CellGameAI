@@ -6,6 +6,7 @@ class Particle:
         self.r = r
         self.g = g
         self.b = b
+        self.color = self.get_dominant_color()
 
         self.mass = mass
         self.size = size
@@ -18,3 +19,12 @@ class Particle:
             pygame.draw.circle(surface, perceived_color, (int(x), int(y)), self.size*zoom_factor, width= 1)
 
 
+    def get_dominant_color(self):
+        max_val = max(self.r, self.g, self.b)
+
+        if self.r == max_val:
+            return 'r'
+        elif self.g == max_val:
+            return 'g'
+        else:
+            return 'b'
