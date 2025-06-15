@@ -40,13 +40,10 @@ class CellAI:
         # Evaluate particles
         for particle in particles:
             # Prefer particles of matching color (based on RGB channel matching)
-            if particle.r == cell.genome.r or particle.g == cell.genome.g or particle.b == cell.genome.b:
-                dist = distance_squared(cell, particle) * 0.5
-            else:
+            if particle.color == cell.color:
                 dist = distance_squared(cell, particle)
-
-            distance_particle[dist] = particle
-            distances.append(dist)
+                distance_particle[dist] = particle
+                distances.append(dist)
 
         # Social force based on behavior toward other cells
         social_force_x, social_force_y = 0, 0

@@ -93,8 +93,23 @@ class Game:
         self.handler.post_solve = self.post_collision
         self.handler.separate = self.separate_collision
 
-    def create_particles(self, count, x_bounds = None, y_bounds = None):
+    def create_particles(self, count, color, x_bounds = None, y_bounds = None):
         particles = []
+        if color == 'r':
+            col1 = 0, 255, 0
+            col2 = 0, 0, 255
+            col3 = 255, 0 ,0
+
+        elif color == 'g':
+            col1 = 0, 0, 255
+            col2 = 255, 0, 0
+            col3 = 0, 255, 0
+
+        else:
+            col1 = 255, 0, 0
+            col2 = 0, 255, 0
+            col3 = 0, 0, 255
+
         for _ in range(count):
             if x_bounds and y_bounds:
                 x = random.randint(*x_bounds)
@@ -104,12 +119,12 @@ class Game:
                 y = random.randint(0, self.screen_height)
 
             color = random.randint(1, 100)
-            if color <= 33:
-                particle = Particle((x, y), 255, 0, 0)
-            elif 33 < color <= 67:
-                particle = Particle((x, y), 0, 255, 0)
+            if color <= 50:
+                particle = Particle((x, y), col1[0], col1[1], col1[2])
+            elif 50 < color <= 85:
+                particle = Particle((x, y), col2[0], col2[1], col2[2])
             else:
-                particle = Particle((x, y), 0, 0, 255)
+                particle = Particle((x, y), col3[0], col3[1], col3[2])
 
             particles.append(particle)
         return particles
@@ -193,7 +208,7 @@ class Game:
                 self.grid[(grid_x, grid_y)] = []
 
                 # Spawn 24 particles in this cell using create_particles
-                new_particles = self.create_particles(24, (x, x + self.grid_size - 1), (y, y + self.grid_size - 1))
+                new_particles = self.create_particles(24, 'd', (x, x + self.grid_size - 1), (y, y + self.grid_size - 1))
                 self.grid[(grid_x, grid_y)].extend(new_particles)
                 # print(grid_x, grid_y, new_particles, "\n")
                 # self.particles.extend(new_particles)
@@ -434,8 +449,7 @@ class Game:
                     if obj in self.consumed_particles:
                         pass
                     else:
-                        cell.consume_particle(obj.mass, obj.r, obj.g, obj.b)
-                        self.consumed_particles.append(obj)
+                        cell.consume_particle(obj, self.consumed_particles)
 
                 # if cell check consumed by cell
                 if isinstance(obj, Cell) and (obj != cell) and (not obj.dead):
@@ -443,7 +457,7 @@ class Game:
                             cell.consume_cell(obj, self.to_remove_cells)
 
             # check if cell can split
-            cell.split(self.cells, self.space)
+            cell.split(self.cells, self.grid, self.grid_size ,self.space)
             if cell.is_player:
                 self.player = cell
                 self.zoom_factor = 50/cell.genome.size
@@ -458,6 +472,7 @@ class Game:
                 if cell.genome.exploding:
                     self.trigger_explosion(cell)
                 if cell not in self.to_remove_cells:
+                    cell.color = 'b'
                     self.to_remove_cells.add(cell)
 
                 if cell == self.player:
@@ -486,7 +501,7 @@ class Game:
             y = grid_y * self.grid_size
 
             # Spawn 24 particles in this cell using create_particles
-            new_particles = self.create_particles(dead.mass, (x, x + self.grid_size - 1), (y, y + self.grid_size - 1))
+            new_particles = self.create_particles(dead.mass, dead.color,(x, x + self.grid_size - 1), (y, y + self.grid_size - 1))
             self.grid[(grid_x, grid_y)].extend(new_particles)
             dead.remove_from_space(self.space)
             if dead in self.cells:
