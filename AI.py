@@ -41,9 +41,15 @@ class CellAI:
         for particle in particles:
             # Prefer particles of matching color (based on RGB channel matching)
             if particle.color == cell.color:
+                dist = distance_squared(cell, particle)* 0.5
+            elif not cell.genome.p_consumption[particle.color]:
+                # ignore this particle
+                continue
+            else:
                 dist = distance_squared(cell, particle)
-                distance_particle[dist] = particle
-                distances.append(dist)
+
+            distance_particle[dist] = particle
+            distances.append(dist)
 
         # Social force based on behavior toward other cells
         social_force_x, social_force_y = 0, 0

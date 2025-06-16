@@ -97,7 +97,7 @@ class Cell(PhysicsParticle):
             other.dead = True
             other.age = other.genome.max_age + 1
             to_remove_cells.add(other)
-            print("Consumed", other.color, "cell!")
+            print(self.color, "cell consumed", other.color, "cell!")
 
         '''elif  (self.mass > (2 * other.mass)) and (other.genome.thickness == 2):
             other.death(particles)
@@ -292,10 +292,12 @@ class Genome:
                 self.c_consumption['g'] = False
 
             # psychological
+            # gain ability to see red
             if random.random() < self.mutation_rate:
                 if not (self.perception["b"] and self.perception["g"]):
                     self.perception["r"] = True
 
+            # lose ability to see blue
             if random.random() < self.mutation_rate:
                 if self.perception["b"]:
                     self.perception["b"] = False
@@ -394,6 +396,12 @@ class Genome:
                 self.max_age -= random.randint(1, 5)
                 if self.max_age < 30:
                     self.max_age = 30
+
+            # lose size
+            if random.random() < self.mutation_rate:
+                self.size -= random.randint(1,5)
+                if self.size < 5:
+                    self.size = 5
 
 
     def __str__(self):
