@@ -1,6 +1,9 @@
 import pygame
 import pymunk
 import math
+
+from pygame.examples.scroll import zoom_factor
+
 from particle import Particle
 import random
 import copy
@@ -9,7 +12,7 @@ from physics_particle import PhysicsParticle
 
 
 class Cell(PhysicsParticle):
-    def __init__(self, position: tuple, chromosome: list, active_gene: int = 0, is_player: bool = False, has_split: bool = False):
+    def __init__(self, position: tuple, chromosome: list, active_gene: int = 0, generation: int = 0, is_player: bool = False, has_split: bool = False):
         self.chromosome = chromosome
         self.genome = chromosome[active_gene]
         self.size = self.genome.size
@@ -19,6 +22,8 @@ class Cell(PhysicsParticle):
         self.is_player = is_player
         self.has_split = has_split
         self.dead = False
+        self.generation = generation
+        self.animation = 0
 
         self.color = self.get_dominant_color()
 
@@ -37,6 +42,10 @@ class Cell(PhysicsParticle):
     def draw(self, perceived_color, surface, zoom_factor = 1.0, offset=(0, 0)):
         x, y = self.body.position[0]*zoom_factor + offset[0], self.body.position[1]*zoom_factor + offset[1]
         pygame.draw.circle(surface, perceived_color, (int(x), int(y)), self.size*zoom_factor, self.genome.thickness)
+        pygame.draw.circle(surface, perceived_color, (int(x) + self.animation*zoom_factor, int(y)), self.size*zoom_factor, self.genome.thickness)
+        pygame.draw.circle(surface, (0,0,0), (int(x), int(y)),  (self.size*0.99) * zoom_factor)
+        pygame.draw.circle(surface, (0,0,0), (int(x) + self.animation * zoom_factor, int(y)),
+                          (self.size*0.99) * zoom_factor)
 
     def draw_split_cell(self, screen):
         animate_split = 0
@@ -89,6 +98,8 @@ class Cell(PhysicsParticle):
         if self.genome.p_consumption[obj.color]:
             self.calculate_mass(obj.mass)
             self.calculate_colour(obj.mass, obj.r, obj.g, obj.b)
+            if self.mass >= (self.genome.max_mass - 9):
+                self.animation += (self.size//4)
             consumed_particles.append(obj)
 
     def consume_cell(self, other, to_remove_cells):
@@ -130,8 +141,8 @@ class Cell(PhysicsParticle):
             pos1 = self.body.position[0] - new_chrome1[active_gene1].size, self.body.position[1]
             pos2 = self.body.position[0] + new_chrome2[active_gene2].size, self.body.position[1]
 
-            new_cell1 = Cell(pos1,new_chrome1,active_gene1)
-            new_cell2 = Cell(pos2,new_chrome2,active_gene2)
+            new_cell1 = Cell(pos1,new_chrome1,active_gene1, self.generation + 1)
+            new_cell2 = Cell(pos2,new_chrome2,active_gene2, self.generation + 1)
 
             new_mass = new_cell1.genome.start_mass + new_cell2.genome.start_mass
             '''# effort to maintain mass in the system (matter aint created nor destroyed)

@@ -45,8 +45,8 @@ class Game:
         # initialize chunks and grid
         self.grid_size = 120
         self.chunk_size = 16
-        self.num_chunks_x = 4
-        self.num_chunks_y = 4
+        self.num_chunks_x = 1
+        self.num_chunks_y = 1
 
         # chunk and grid properties
         self.num_columns = self.chunk_size * self.num_chunks_x
@@ -74,6 +74,9 @@ class Game:
         self.player = Cell((spawn_x, spawn_y), init_chromosome,is_player = True)
         self.player.add_to_space(self.space)
         self.player.set_collision_type(0)
+
+        # keep track of generations (for high scores)
+        self.generation = 0
 
         self.cells = [self.player]
         # self.particles = self.create_particles(5000)
@@ -537,7 +540,13 @@ class Game:
 
         fps = self.clock.get_fps()
         fps_text = self.font.render(f"FPS: {fps:.2f}", True, pygame.Color("white"))
+        age_text = self.font.render(f"AGE: {int(self.player.age)} / {self.player.genome.max_age}", True, pygame.Color("white"))
+        age_text_rect = age_text.get_rect(center=(self.screen_width - 50, 20))
+        hs_text = self.font.render(f"GENERATION: {self.player.generation}", True, pygame.Color("white"))
+        hs_text_rect = hs_text.get_rect(center=(self.screen_width//2, 20))
         self.screen.blit(fps_text, (10, 10))
+        self.screen.blit(age_text, age_text_rect)
+        self.screen.blit(hs_text, hs_text_rect)
 
         pygame.display.flip()
 
